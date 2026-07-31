@@ -220,6 +220,8 @@ async function syncCodex() {
   // Add each server fresh
   for (const [name, server] of Object.entries(servers)) {
     const [cmd, ...args] = server.command
+    // Resolve absolute path — Codex runs sandboxed and may not have ~/.local/bin in PATH
+    const resolvedCmd = resolveBin(cmd) ?? cmd
     const cliArgs = ['mcp', 'add', name]
     if (server.env) {
       for (const [k, v] of Object.entries(server.env)) {
@@ -227,10 +229,10 @@ async function syncCodex() {
       }
     }
     cliArgs.push('--')
-    cliArgs.push(cmd, ...args.map(a => interpolate(a)))
+    cliArgs.push(resolvedCmd, ...args.map(a => interpolate(a)))
     try {
       run(cliArgs)
-      ok(`Codex    (mcp add ${name})`)
+      ok(`Codex    (mcp add ${name} → ${resolvedCmd})`)
     } catch (e) {
       err(`Codex add ${name}: ${e.message.slice(0, 80)}`)
     }
