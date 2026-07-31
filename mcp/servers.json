@@ -1,0 +1,46 @@
+{
+  "servers": {
+    "context7": {
+      "command": ["npx", "@upstash/context7-mcp@1.0.31"],
+      "env": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+      },
+      "requires": ["npx"],
+      "description": "Library docs lookup via Context7"
+    },
+    "sequential-thinking": {
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "requires": ["npx"],
+      "description": "Sequential reasoning / chain-of-thought"
+    },
+    "codegraph": {
+      "command": ["codegraph", "serve", "--mcp"],
+      "requires": ["codegraph"],
+      "description": "Code intelligence and knowledge graph"
+    },
+    "mysql": {
+      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "env": {
+        "MYSQL_HOST": "${MYSQL_CLOUD_HOST}",
+        "MYSQL_PORT": "${MYSQL_CLOUD_PORT}",
+        "MYSQL_USER": "${MYSQL_CLOUD_USER}",
+        "MYSQL_PASSWORD": "${MYSQL_CLOUD_PASSWORD}",
+        "MYSQL_DATABASE": "${MYSQL_CLOUD_DB}"
+      },
+      "requires": ["uvx"],
+      "description": "MySQL MCP — PlanetScale/cloud"
+    },
+    "mysql-local": {
+      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "env": {
+        "MYSQL_HOST": "127.0.0.1",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "${MYSQL_LOCAL_USER}",
+        "MYSQL_PASSWORD": "${MYSQL_LOCAL_PASSWORD}",
+        "MYSQL_DATABASE": "${MYSQL_LOCAL_DB}"
+      },
+      "requires": ["uvx"],
+      "description": "MySQL MCP — local dev DB"
+    }
+  }
+}

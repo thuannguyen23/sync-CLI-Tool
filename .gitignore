@@ -1,0 +1,9 @@
+secrets.env
+*.env.local
+.DS_Store
+
+# Skills managed externally (have their own git repos)
+skills/huggingface-skills/
+skills/ml-training/
+skills/nvidia-skills/
+skills/orchestra-ai-research-skills/
