@@ -33,8 +33,8 @@
     "mysql-local": {
       "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
       "env": {
-        "MYSQL_HOST": "127.0.0.1",
-        "MYSQL_PORT": "3306",
+        "MYSQL_HOST": "${MYSQL_LOCAL_HOST}",
+        "MYSQL_PORT": "${MYSQL_LOCAL_PORT}",
         "MYSQL_USER": "${MYSQL_LOCAL_USER}",
         "MYSQL_PASSWORD": "${MYSQL_LOCAL_PASSWORD}",
         "MYSQL_DATABASE": "${MYSQL_LOCAL_DB}"
