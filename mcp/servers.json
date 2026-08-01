@@ -50,13 +50,10 @@
       "requires": ["npx"],
       "description": "Thao tác repository, PRs, Issues trên GitHub"
     },
-    "brave-search": {
-      "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
-      "env": {
-        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
-      },
+    "web-search": {
+      "command": ["npx", "-y", "@zhafron/mcp-web-search"],
       "requires": ["npx"],
-      "description": "Search web lấy thông tin docs mới nhất"
+      "description": "Tìm kiếm web (DuckDuckGo, Bing) không cần API key"
     },
     "puppeteer": {
       "command": ["npx", "-y", "@modelcontextprotocol/server-puppeteer"],
