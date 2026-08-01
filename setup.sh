@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# ~/.agents/setup.sh
+# sync-CLI-Tool/setup.sh
 # One-command bootstrap for a new machine.
-# Run: ~/.agents/setup.sh
+# Can be cloned anywhere — creates ~/.agents symlink automatically.
+# Run: ~/sync-CLI-Tool/setup.sh  (or wherever you cloned it)
 #
 # What it does:
+#   0. Create ~/.agents symlink → this folder (needed by OpenCode skill discovery)
 #   1. Check/install prerequisites (nvm, uv, rtk, codegraph)
 #   2. Create secrets.env from template if missing
 #   3. Symlink skills → all 4 tool locations
@@ -27,8 +29,23 @@ section() { echo -e "\n${BOLD}━━ $1 ━━${NC}"; }
 has()     { command -v "$1" &>/dev/null; }
 
 echo ""
-echo -e "${BOLD}🚀 ~/.agents dotfiles setup${NC}"
-echo "================================"
+echo -e "${BOLD}🚀 sync-CLI-Tool setup${NC}"
+echo "=============================="
+
+# ─── Step 0: ~/.agents symlink ───────────────────────────────────────────────
+# Many tools (OpenCode, etc.) expect skills at ~/.agents/skills/
+# We create ~/.agents as a symlink → wherever this repo actually lives.
+if [ -L "$HOME_DIR/.agents" ] && [ "$(readlink -f "$HOME_DIR/.agents")" = "$AGENTS_DIR" ]; then
+  info "~/.agents → $AGENTS_DIR (already correct)"
+elif [ -e "$HOME_DIR/.agents" ] && [ ! -L "$HOME_DIR/.agents" ]; then
+  warn "~/.agents exists as a real directory — backing up to ~/.agents.bak"
+  mv "$HOME_DIR/.agents" "$HOME_DIR/.agents.bak"
+  ln -sfn "$AGENTS_DIR" "$HOME_DIR/.agents"
+  ok "~/.agents → $AGENTS_DIR (old dir backed up)"
+else
+  ln -sfn "$AGENTS_DIR" "$HOME_DIR/.agents"
+  ok "~/.agents → $AGENTS_DIR"
+fi
 
 # ─── Step 1: Prerequisites ───────────────────────────────────────────────────
 section "1 / 7  Prerequisites"
