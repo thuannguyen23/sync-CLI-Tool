@@ -35,9 +35,10 @@ Trên máy kia: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mjs`
 │   └── servers.json            # Master MCP definitions (${VAR} placeholders)
 │
 ├── rules/
-│   └── AGENTS.md               # RTK + Math rules (symlinked → AGY, OpenCode; @imported → Codex)
+│   └── AGENTS.md               # Canonical global workflow + Codegraph + verification policy
 │
 ├── plugins/
+│   ├── cursor/                 # Cursor local plugin (global workflow rule)
 │   └── opencode/
 │       └── rtk.ts              # OpenCode RTK plugin (runtime hook)
 │
@@ -53,11 +54,19 @@ Trên máy kia: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mjs`
 
 ## Cơ chế mỗi tool
 
+### Global Rules
+| Tool | Cơ chế | File |
+|------|--------|------|
+| AGY | Symlink canonical policy | `~/.gemini/config/AGENTS.md` → `rules/AGENTS.md` |
+| Codex | Symlink canonical policy | `~/.codex/AGENTS.md` → `rules/AGENTS.md` |
+| OpenCode | Symlink canonical policy | `~/.config/opencode/AGENTS.md` → `rules/AGENTS.md` |
+| Cursor | Local plugin | `~/.cursor/plugins/local/sync-cli-tool` → `plugins/cursor/` |
+
 ### RTK
 | Tool | Cơ chế | File |
 |------|--------|------|
 | AGY | Prompt rule | `~/.gemini/config/AGENTS.md` → symlink → `rules/AGENTS.md` |
-| Codex | Prompt rule (import) | `~/.codex/AGENTS.md` (`@rules/AGENTS.md`) |
+| Codex | Prompt rule | `~/.codex/AGENTS.md` → symlink → `rules/AGENTS.md` |
 | OpenCode | Runtime TS plugin | `~/.config/opencode/plugins/rtk.ts` → symlink → `plugins/opencode/rtk.ts` |
 | Cursor | Pre-tool hook | `~/.cursor/hooks.json` (preToolUse Shell → `rtk hook cursor`) |
 

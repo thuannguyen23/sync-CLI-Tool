@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # Global Agent Workflow
 
 These instructions are tool-neutral defaults for every project. Project-level

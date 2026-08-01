@@ -9,7 +9,7 @@
 #   1. Check/install prerequisites (nvm, uv, rtk, codegraph)
 #   2. Create secrets.env from template if missing
 #   3. Symlink skills → all 4 tool locations
-#   4. Symlink AGENTS.md (RTK rules) → all global instruction paths
+#   4. Install global agent workflow rules for all 4 tools
 #   5. Symlink / copy OpenCode rtk.ts plugin
 #   6. Sync MCP configs (servers.json → 4 tool-specific formats)
 #   7. Write hooks.json for Codex and Cursor
@@ -131,13 +131,35 @@ mkdir -p "$HOME_DIR/.config/opencode"
 ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/opencode/AGENTS.md"
 ok "OpenCode AGENTS.md → $AGENTS_MD"
 
-# Codex: write a file that uses @import syntax (Codex-specific)
-# This imports the same RTK.md content via Codex's include mechanism
+# Codex: use the canonical policy directly. A symlink avoids relying on
+# undocumented include expansion inside the global AGENTS.md file.
 mkdir -p "$HOME_DIR/.codex"
-cat > "$HOME_DIR/.codex/AGENTS.md" << EOF
-@$AGENTS_MD
-EOF
-ok "Codex AGENTS.md (imports $AGENTS_MD)"
+ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
+ok "Codex AGENTS.md → $AGENTS_MD"
+
+# Cursor: file-backed global rules are distributed as a local plugin.
+# This avoids modifying Cursor's cloud-managed User Rules or internal database.
+CURSOR_PLUGIN_SRC="$AGENTS_DIR/plugins/cursor"
+CURSOR_PLUGIN_DST="$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
+mkdir -p "$HOME_DIR/.cursor/plugins/local"
+
+if [ -L "$CURSOR_PLUGIN_DST" ]; then
+  ln -sfn "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
+  ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
+elif [ -e "$CURSOR_PLUGIN_DST" ]; then
+  CURSOR_PLUGIN_BACKUP="$CURSOR_PLUGIN_DST.bak"
+  if [ -e "$CURSOR_PLUGIN_BACKUP" ] || [ -L "$CURSOR_PLUGIN_BACKUP" ]; then
+    err "Cursor plugin backup already exists: $CURSOR_PLUGIN_BACKUP"
+    err "Move or remove it, then re-run setup.sh"
+  else
+    mv "$CURSOR_PLUGIN_DST" "$CURSOR_PLUGIN_BACKUP"
+    ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
+    ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC (old plugin backed up)"
+  fi
+else
+  ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
+  ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
+fi
 
 # ─── Step 5: OpenCode rtk.ts plugin ──────────────────────────────────────────
 section "5 / 7  OpenCode rtk.ts plugin"
@@ -227,7 +249,7 @@ echo -e "${GREEN}${BOLD}  ✨ Setup complete!${NC}"
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "  Skills:    ~/.agents/skills/ (symlinked to AGY, Cursor, Codex)"
-echo "  AGENTS.md: ~/.agents/rules/AGENTS.md (synced to AGY, OpenCode, Codex)"
+echo "  Rules:     ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Cursor plugin)"
 echo "  MCP:       5 servers synced to AGY, Cursor, OpenCode, Codex"
 echo "  RTK:       hooks.json (Cursor), plugin (OpenCode), rules (AGY/Codex)"
 echo ""
