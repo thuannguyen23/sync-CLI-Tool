@@ -209,12 +209,10 @@ async function syncCodex() {
       .filter(n => n && n !== 'context-mode') // never remove context-mode plugin
   } catch { /* ignore */ }
 
-  // Remove our managed servers (so we can re-add with fresh values)
-  for (const name of Object.keys(servers)) {
-    if (existingNames.includes(name)) {
-      try { run(['mcp', 'remove', name]); info(`Codex: removed old ${name}`) }
-      catch { /* ignore */ }
-    }
+  // Remove all existing managed servers so we can fully sync from servers.json
+  for (const name of existingNames) {
+    try { run(['mcp', 'remove', name]); info(`Codex: removed old ${name}`) }
+    catch { /* ignore */ }
   }
 
   // Add each server fresh

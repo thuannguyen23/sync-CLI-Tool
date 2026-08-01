@@ -83,6 +83,7 @@ for skill_dir in "$SKILLS_SRC"/*/; do
     info "AGY skill exists: $skill_name"
   fi
 done
+find "$HOME_DIR/.gemini/config/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
 # Cursor: ~/.config/Cursor/User/skills → ~/.agents/skills
 mkdir -p "$HOME_DIR/.config/Cursor/User"
@@ -111,6 +112,7 @@ for skill_dir in "$SKILLS_SRC"/*/; do
     info "Codex skill already exists: $skill_name"
   fi
 done
+find "$HOME_DIR/.codex/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 
 # OpenCode reads ~/.agents/skills natively (Agent Skills spec)
 ok "OpenCode skills: reads ~/.agents/skills natively (no symlink needed)"
