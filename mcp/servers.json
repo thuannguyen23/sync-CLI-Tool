@@ -41,6 +41,27 @@
       },
       "requires": ["uvx"],
       "description": "MySQL MCP — local dev DB"
+    },
+    "github": {
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "requires": ["npx"],
+      "description": "Thao tác repository, PRs, Issues trên GitHub"
+    },
+    "brave-search": {
+      "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      },
+      "requires": ["npx"],
+      "description": "Search web lấy thông tin docs mới nhất"
+    },
+    "puppeteer": {
+      "command": ["npx", "-y", "@modelcontextprotocol/server-puppeteer"],
+      "requires": ["npx"],
+      "description": "Browser automation, E2E testing, scraping"
     }
   }
 }
