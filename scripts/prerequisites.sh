@@ -26,17 +26,22 @@ else
   if ! has nvm && [ ! -f "$HOME/.nvm/nvm.sh" ]; then
     info "Downloading nvm installer..."
     curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    set +u
     # shellcheck disable=SC1090
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
   else
+    set +u
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
   fi
+  set -u
 
   if has nvm || type nvm &>/dev/null 2>&1; then
+    set +u
     nvm install --lts
     nvm use --lts
+    set -u
     ok "Node.js LTS installed via nvm"
     info "Restart shell or run: source ~/.bashrc (or ~/.zshrc) to activate"
   else
