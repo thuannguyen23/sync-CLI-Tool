@@ -161,16 +161,42 @@ else
   ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
 fi
 
-# ─── Step 5: OpenCode rtk.ts plugin ──────────────────────────────────────────
-section "5 / 7  OpenCode rtk.ts plugin"
-RTK_SRC="$AGENTS_DIR/plugins/opencode/rtk.ts"
-RTK_DST="$HOME_DIR/.config/opencode/plugins/rtk.ts"
-mkdir -p "$(dirname "$RTK_DST")"
-if [ ! -f "$RTK_DST" ] || [ "$RTK_SRC" -nt "$RTK_DST" ]; then
+# ─── Step 5: RTK (Rust Token Killer) ─────────────────────────────────────────
+# Each agent gets RTK through its native mechanism:
+#   Cursor  → hook (rtk init merges into hooks.json, preserves existing hooks)
+#   Codex   → RTK.md instruction file (no hook — Codex can't modify tool args)
+#   AGY     → rules .md file (no hook — AGY has bounded hook support only)
+#   OpenCode → TypeScript plugin (symlinked from repo for version control)
+section "5 / 7  RTK (Rust Token Killer)"
+if has rtk; then
+  # Cursor: merge RTK hook into hooks.json (hook-only = no RTK.md clutter)
+  rtk init -g --agent cursor --hook-only --auto-patch 2>/dev/null \
+    && ok "RTK → Cursor (hook merged into hooks.json)" \
+    || info "RTK → Cursor (already configured)"
+
+  # Codex: create RTK.md instruction file
+  rtk init -g --codex --auto-patch 2>/dev/null \
+    && ok "RTK → Codex (RTK.md created)" \
+    || info "RTK → Codex (already configured)"
+  # Re-symlink AGENTS.md — rtk init --codex may have overwritten our symlink
+  AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
+
+  # AGY: create rules markdown file (project-scoped, run from repo dir)
+  (cd "$AGENTS_DIR" && rtk init --agent antigravity --auto-patch 2>/dev/null) \
+    && ok "RTK → AGY (rules file created)" \
+    || info "RTK → AGY (already configured)"
+
+  # OpenCode: symlink rtk.ts plugin from repo (NOT rtk init, to preserve
+  # the version-controlled plugin in sync-CLI-Tool/plugins/opencode/rtk.ts)
+  RTK_SRC="$AGENTS_DIR/plugins/opencode/rtk.ts"
+  RTK_DST="$HOME_DIR/.config/opencode/plugins/rtk.ts"
+  mkdir -p "$(dirname "$RTK_DST")"
   ln -sfn "$RTK_SRC" "$RTK_DST"
-  ok "rtk.ts plugin → $RTK_DST"
+  ok "RTK → OpenCode (plugin symlink)"
 else
-  ok "rtk.ts plugin already up to date"
+  warn "rtk not found — skipping RTK setup for all agents"
+  info "Install RTK: cargo install rtk"
 fi
 
 # ─── Step 6: MCP sync ────────────────────────────────────────────────────────
@@ -178,68 +204,20 @@ section "6 / 7  MCP configs"
 if has node; then
   node "$AGENTS_DIR/scripts/sync-mcp.mjs"
 else
-  err "node not found — cannot sync MCP configs. Install Node.js first."
+  err "node not found — cannot sync MCP/hooks. Install Node.js first."
   warn "After installing Node.js, re-run: ~/.agents/setup.sh"
 fi
 
-# ─── Step 7: Hooks ───────────────────────────────────────────────────────────
-section "7 / 7  Hooks"
-
-# Codex hooks.json — SessionStart → herdr-agent-state.sh
-CODEX_HOOK_SCRIPT="$HOME_DIR/.codex/herdr-agent-state.sh"
-mkdir -p "$HOME_DIR/.codex"
-cat > "$HOME_DIR/.codex/hooks.json" << EOF
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "command": "bash '${CODEX_HOOK_SCRIPT}' session",
-            "timeout": 10,
-            "type": "command"
-          }
-        ]
-      }
-    ]
-  }
-}
-EOF
-if [ -f "$CODEX_HOOK_SCRIPT" ]; then
-  ok "Codex hooks.json (herdr hook active)"
+# ─── Step 7: Context-mode + Herdr hooks ──────────────────────────────────────
+# Merges context-mode hooks + herdr hooks into each agent's config.
+# Runs AFTER sync-mcp.mjs because it adds context-mode MCP to Cursor's
+# mcp.json (which sync-mcp.mjs overwrites with shared servers).
+# Preserves RTK hooks added in Step 5.
+section "7 / 7  Context-mode + Herdr hooks"
+if has node; then
+  node "$AGENTS_DIR/scripts/sync-hooks.mjs"
 else
-  ok "Codex hooks.json written"
-  warn "herdr-agent-state.sh not found — run 'herdr setup codex' to activate"
-fi
-
-# Cursor hooks.json — preToolUse (rtk) + sessionStart (herdr)
-CURSOR_HOOK_SCRIPT="$HOME_DIR/.cursor/herdr-agent-state.sh"
-mkdir -p "$HOME_DIR/.cursor"
-cat > "$HOME_DIR/.cursor/hooks.json" << EOF
-{
-  "hooks": {
-    "preToolUse": [
-      {
-        "command": "rtk hook cursor",
-        "matcher": "Shell"
-      }
-    ],
-    "sessionStart": [
-      {
-        "command": "bash '${CURSOR_HOOK_SCRIPT}' session"
-      }
-    ]
-  },
-  "version": 1
-}
-EOF
-if has rtk && [ -f "$CURSOR_HOOK_SCRIPT" ]; then
-  ok "Cursor hooks.json (rtk + herdr active)"
-elif has rtk; then
-  ok "Cursor hooks.json (rtk active)"
-  warn "herdr-agent-state.sh not found — run 'herdr setup cursor' to activate"
-else
-  warn "Cursor hooks.json written — rtk not in PATH yet (restart shell after install)"
+  warn "node not found — cannot sync hooks. Skipping."
 fi
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
@@ -248,14 +226,16 @@ echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${GREEN}${BOLD}  ✨ Setup complete!${NC}"
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Skills:    ~/.agents/skills/ (symlinked to AGY, Cursor, Codex)"
-echo "  Rules:     ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Cursor plugin)"
-echo "  MCP:       5 servers synced to AGY, Cursor, OpenCode, Codex"
-echo "  RTK:       hooks.json (Cursor), plugin (OpenCode), rules (AGY/Codex)"
+echo "  Skills:       ~/.agents/skills/ (symlinked to AGY, Cursor, Codex)"
+echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Cursor plugin)"
+echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex"
+echo "  RTK:          hook (Cursor), plugin (OpenCode), RTK.md (Codex), rules (AGY)"
+echo "  Context-mode: hooks (Cursor, AGY), plugin (OpenCode, Codex)"
+echo "  Herdr:        sessionStart hooks (Cursor, Codex)"
 echo ""
 echo "  When you add a new MCP server:"
 echo -e "  ${DIM}1. Edit ~/.agents/mcp/servers.json${NC}"
-echo -e "  ${DIM}2. Run: ~/.agents/setup.sh (or node ~/.agents/scripts/sync-mcp.mjs)${NC}"
+echo -e "  ${DIM}2. Run: ~/.agents/setup.sh${NC}"
 echo -e "  ${DIM}3. git -C ~/.agents push${NC}"
 echo ""
 echo "  On a new machine:"
