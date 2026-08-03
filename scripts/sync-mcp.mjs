@@ -87,6 +87,17 @@ function checkRequires(serverName, requires = []) {
 function buildAgy() {
   const mcpServers = {}
   for (const [name, server] of Object.entries(servers)) {
+    if (server.url) {
+      mcpServers[name] = {
+        url: interpolate(server.url),
+        ...(server.headers ? {
+          headers: Object.fromEntries(
+            Object.entries(server.headers).map(([k, v]) => [k, interpolate(v)])
+          )
+        } : {})
+      }
+      continue
+    }
     checkRequires(name, server.requires)
     const [cmd, ...args] = server.command
     const resolvedCmd = resolveBin(cmd) ?? cmd
@@ -118,6 +129,17 @@ function buildAgy() {
 function buildCursor() {
   const mcpServers = {}
   for (const [name, server] of Object.entries(servers)) {
+    if (server.url) {
+      mcpServers[name] = {
+        url: interpolate(server.url),
+        ...(server.headers ? {
+          headers: Object.fromEntries(
+            Object.entries(server.headers).map(([k, v]) => [k, interpolate(v)])
+          )
+        } : {})
+      }
+      continue
+    }
     const [cmd, ...args] = server.command
     const entry = { command: cmd, args: args.map(a => interpolate(a)) }
     if (server.env && Object.keys(server.env).length > 0) {
@@ -155,6 +177,19 @@ function buildOpenCode() {
 
   const mcp = {}
   for (const [name, server] of Object.entries(servers)) {
+    if (server.url) {
+      mcp[name] = {
+        type: 'remote',
+        url: interpolate(server.url),
+        ...(server.headers ? {
+          headers: Object.fromEntries(
+            Object.entries(server.headers).map(([k, v]) => [k, interpolate(v)])
+          )
+        } : {}),
+        enabled: true
+      }
+      continue
+    }
     const entry = {
       type: 'local',
       command: server.command.map(p => interpolate(p)),
@@ -181,11 +216,12 @@ function buildOpenCode() {
   // Add MCP permissions for any new servers
   const permission = { ...(existing.permission ?? {}) }
   for (const name of Object.keys(servers)) {
-    const permKey = `mcp__${name.replace(/-/g, '_')}__execute_sql`
-    // Only add codegraph and mysql permissions explicitly
-    if (name === 'codegraph') permission[`mcp__codegraph__codegraph_explore`] = 'allow'
-    if (name === 'mysql')     permission[`mcp__mysql__execute_sql`] = 'allow'
-    if (name === 'mysql-local') permission[`mcp__mysql_local__execute_sql`] = 'allow'
+    if (name === 'codegraph') {
+      permission[`mcp__codegraph__codegraph_explore`] = 'allow'
+    } else if (name.startsWith('mysql')) {
+      const sanitized = name.replace(/-/g, '_')
+      permission[`mcp__${sanitized}__execute_sql`] = 'allow'
+    }
   }
 
   return { ...existing, plugin: plugins, mcp, permission }
@@ -197,7 +233,12 @@ function buildOpenCode() {
 async function syncCodex() {
   const { execFileSync } = await import('node:child_process')
   const run = (args, opts = {}) =>
-    execFileSync('codex', args, { encoding: 'utf8', stdio: 'pipe', ...opts })
+    execFileSync('codex', args, {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      ...opts,
+      env: { ...process.env, ...secrets, ...opts.env }
+    })
 
   // Get existing MCP names from codex cli
   let existingNames = []
@@ -217,6 +258,22 @@ async function syncCodex() {
 
   // Add each server fresh
   for (const [name, server] of Object.entries(servers)) {
+    if (server.url) {
+      const cliArgs = ['mcp', 'add', name, '--url', interpolate(server.url)]
+      if (server.headers && server.headers.Authorization) {
+        const match = server.headers.Authorization.match(/\$\{([^}]+)\}/)
+        if (match) {
+          cliArgs.push('--bearer-token-env-var', match[1])
+        }
+      }
+      try {
+        run(cliArgs)
+        ok(`Codex    (mcp add ${name} → ${server.url})`)
+      } catch (e) {
+        err(`Codex add ${name}: ${e.message.slice(0, 80)}`)
+      }
+      continue
+    }
     const [cmd, ...args] = server.command
     // Resolve absolute path — Codex runs sandboxed and may not have ~/.local/bin in PATH
     const resolvedCmd = resolveBin(cmd) ?? cmd

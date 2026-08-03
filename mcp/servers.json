@@ -18,29 +18,61 @@
       "requires": ["codegraph"],
       "description": "Code intelligence and knowledge graph"
     },
-    "mysql": {
+    "mysql-local-ecb": {
       "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
       "env": {
-        "MYSQL_HOST": "${MYSQL_CLOUD_HOST}",
-        "MYSQL_PORT": "${MYSQL_CLOUD_PORT}",
-        "MYSQL_USER": "${MYSQL_CLOUD_USER}",
-        "MYSQL_PASSWORD": "${MYSQL_CLOUD_PASSWORD}",
-        "MYSQL_DATABASE": "${MYSQL_CLOUD_DB}"
+        "MYSQL_HOST": "${MYSQL_LOCAL_ECB_HOST}",
+        "MYSQL_PORT": "${MYSQL_LOCAL_ECB_PORT}",
+        "MYSQL_USER": "${MYSQL_LOCAL_ECB_USER}",
+        "MYSQL_PASSWORD": "${MYSQL_LOCAL_ECB_PASSWORD}",
+        "MYSQL_DATABASE": "${MYSQL_LOCAL_ECB_DB}"
       },
       "requires": ["uvx"],
-      "description": "MySQL MCP — PlanetScale/cloud"
+      "description": "MySQL MCP — Local ECB database"
     },
-    "mysql-local": {
+    "mysql-develop-ecb": {
       "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
       "env": {
-        "MYSQL_HOST": "${MYSQL_LOCAL_HOST}",
-        "MYSQL_PORT": "${MYSQL_LOCAL_PORT}",
-        "MYSQL_USER": "${MYSQL_LOCAL_USER}",
-        "MYSQL_PASSWORD": "${MYSQL_LOCAL_PASSWORD}",
-        "MYSQL_DATABASE": "${MYSQL_LOCAL_DB}"
+        "MYSQL_HOST": "${MYSQL_DEVELOP_ECB_HOST}",
+        "MYSQL_PORT": "${MYSQL_DEVELOP_ECB_PORT}",
+        "MYSQL_USER": "${MYSQL_DEVELOP_ECB_USER}",
+        "MYSQL_PASSWORD": "${MYSQL_DEVELOP_ECB_PASSWORD}",
+        "MYSQL_DATABASE": "${MYSQL_DEVELOP_ECB_DB}"
       },
       "requires": ["uvx"],
-      "description": "MySQL MCP — local dev DB"
+      "description": "MySQL MCP — Remote ECB/develop database"
+    },
+    "mysql-remote-jcf": {
+      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "env": {
+        "MYSQL_HOST": "${MYSQL_REMOTE_JCF_HOST}",
+        "MYSQL_PORT": "${MYSQL_REMOTE_JCF_PORT}",
+        "MYSQL_USER": "${MYSQL_REMOTE_JCF_USER}",
+        "MYSQL_PASSWORD": "${MYSQL_REMOTE_JCF_PASSWORD}",
+        "MYSQL_DATABASE": "${MYSQL_REMOTE_JCF_DB}",
+        "MYSQL_SSL": "${MYSQL_REMOTE_JCF_SSL}"
+      },
+      "requires": ["uvx"],
+      "description": "MySQL MCP — Remote JC Finance database"
+    },
+    "mysql-local-forbes": {
+      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "env": {
+        "MYSQL_HOST": "${MYSQL_LOCAL_FORBES_HOST}",
+        "MYSQL_PORT": "${MYSQL_LOCAL_FORBES_PORT}",
+        "MYSQL_USER": "${MYSQL_LOCAL_FORBES_USER}",
+        "MYSQL_PASSWORD": "${MYSQL_LOCAL_FORBES_PASSWORD}",
+        "MYSQL_DATABASE": "${MYSQL_LOCAL_FORBES_DB}"
+      },
+      "requires": ["uvx"],
+      "description": "MySQL MCP — Local Forbes database"
+    },
+    "obsidian": {
+      "url": "${OBSIDIAN_URL}",
+      "headers": {
+        "Authorization": "Bearer ${OBSIDIAN_AUTH_TOKEN}"
+      },
+      "description": "Obsidian vault integration via HTTP/SSE"
     },
     "github": {
       "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
