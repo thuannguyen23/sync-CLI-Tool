@@ -80,12 +80,12 @@
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
       },
       "requires": ["npx"],
-      "description": "Thao tác repository, PRs, Issues trên GitHub"
+      "description": "GitHub repository management, PRs, and issues"
     },
     "web-search": {
       "command": ["npx", "-y", "@zhafron/mcp-web-search"],
       "requires": ["npx"],
-      "description": "Tìm kiếm web (DuckDuckGo, Bing) không cần API key"
+      "description": "Web search (DuckDuckGo, Bing) without needing an API key"
     },
     "puppeteer": {
       "command": ["npx", "-y", "@modelcontextprotocol/server-puppeteer"],

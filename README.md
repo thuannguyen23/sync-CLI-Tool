@@ -1,35 +1,35 @@
 # ~/.agents — AI Coding CLI Dotfiles
 
-Single Source of Truth cho MCP servers, skills, rules, và hooks — sync tự động tới 4 CLI tools: **AGY**, **Codex**, **OpenCode**, **Cursor**.
+Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to 4 CLI tools: **AGY**, **Codex**, **OpenCode**, and **Cursor**.
 
-## Cài đặt (máy mới)
+## Installation (New Machine)
 
 ```bash
 git clone git@github.com:YOU/agents-dotfiles.git ~/.agents
 cp ~/.agents/secrets.env.example ~/.agents/secrets.env
-nano ~/.agents/secrets.env          # điền API keys
+nano ~/.agents/secrets.env          # fill in API keys
 ~/.agents/setup.sh
 ```
 
-Chỉ vậy thôi. Script tự kiểm tra và cài `nvm/node`, `uv/uvx`, `rtk`, `codegraph` nếu thiếu.
+That's it. The script automatically checks and installs `nvm/node`, `uv/uvx`, `rtk`, and `codegraph` if they are missing.
 
-## Khi thêm MCP mới
+## When Adding a New MCP
 
 ```bash
-nano ~/.agents/mcp/servers.json     # thêm server
-node ~/.agents/scripts/sync-mcp.mjs # sync ngay (hoặc setup.sh)
+nano ~/.agents/mcp/servers.json     # add server
+node ~/.agents/scripts/sync-mcp.mjs # sync immediately (or via setup.sh)
 git -C ~/.agents add -A && git commit -m "add X mcp" && git push
 ```
 
-Trên máy kia: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mjs`
+On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mjs`
 
-## Cấu trúc
+## Structure
 
 ```
 ~/.agents/
-├── setup.sh                    # Entry point — chạy lần đầu trên máy mới
-├── secrets.env.example         # Template (commit được)
-├── secrets.env                 # Gitignored — điền values thật
+├── setup.sh                    # Entry point — run for the first time on a new machine
+├── secrets.env.example         # Template (safe to commit)
+├── secrets.env                 # Gitignored — contains actual values
 │
 ├── mcp/
 │   └── servers.json            # Master MCP definitions (${VAR} placeholders)
@@ -52,19 +52,19 @@ Trên máy kia: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mjs`
     └── sync-mcp.mjs            # Convert servers.json → 4 tool formats
 ```
 
-## Cơ chế mỗi tool
+## Tool Mechanics
 
 ### Global Rules
-| Tool | Cơ chế | File |
-|------|--------|------|
+| Tool | Mechanism | File |
+|------|-----------|------|
 | AGY | Symlink canonical policy | `~/.gemini/config/AGENTS.md` → `rules/AGENTS.md` |
 | Codex | Symlink canonical policy | `~/.codex/AGENTS.md` → `rules/AGENTS.md` |
 | OpenCode | Symlink canonical policy | `~/.config/opencode/AGENTS.md` → `rules/AGENTS.md` |
 | Cursor | Local plugin | `~/.cursor/plugins/local/sync-cli-tool` → `plugins/cursor/` |
 
 ### RTK
-| Tool | Cơ chế | File |
-|------|--------|------|
+| Tool | Mechanism | File |
+|------|-----------|------|
 | AGY | Prompt rule | `~/.gemini/config/AGENTS.md` → symlink → `rules/AGENTS.md` |
 | Codex | Prompt rule | `~/.codex/AGENTS.md` → symlink → `rules/AGENTS.md` |
 | OpenCode | Runtime TS plugin | `~/.config/opencode/plugins/rtk.ts` → symlink → `plugins/opencode/rtk.ts` |
