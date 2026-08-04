@@ -40,6 +40,26 @@ function resolveBin(cmd) {
 
 function testMCP(name, server) {
   return new Promise(resolve => {
+    if (server.url) {
+      const url = interp(server.url)
+      if (!url || url.includes('${')) {
+        resolve({ ok: false, error: 'missing URL configuration or secret' })
+        return
+      }
+      resolve({
+        ok: true,
+        serverName: `${name} (HTTP/SSE)`,
+        version: 'remote',
+        tools: null,
+      })
+      return
+    }
+
+    if (!Array.isArray(server.command) || server.command.length === 0) {
+      resolve({ ok: false, error: 'missing command configuration' })
+      return
+    }
+
     const [cmd, ...rawArgs] = server.command
     const bin = resolveBin(cmd) ?? cmd
     const args = rawArgs.map(a => interp(a))
@@ -112,6 +132,10 @@ function testMCP(name, server) {
 // ─── Also test tool call for mysql ───────────────────────────────────────────
 function testMCPCall(name, server, toolName, toolArgs = {}) {
   return new Promise(resolve => {
+    if (!server.command || !Array.isArray(server.command)) {
+      resolve({ ok: false, error: 'not a stdio command server' })
+      return
+    }
     const [cmd, ...rawArgs] = server.command
     const bin = resolveBin(cmd) ?? cmd
     const args = rawArgs.map(a => interp(a))
@@ -176,9 +200,10 @@ function testMCPCall(name, server, toolName, toolArgs = {}) {
     else      fail(r.name.padEnd(22), r.error)
   }
 
-  // Phase 2: tool calls for mysql/mysql-local
+  // Phase 2: tool calls for mysql servers
   console.log(`\n${DIM}Phase 2: Tool calls (get_schema_info)${RESET}`)
-  for (const name of ['mysql', 'mysql-local']) {
+  const mysqlServers = Object.keys(servers).filter(name => name.startsWith('mysql'))
+  for (const name of mysqlServers) {
     if (!servers[name]) continue
     const r = await testMCPCall(name, servers[name], 'get_schema_info', {})
     if (r.ok) {
