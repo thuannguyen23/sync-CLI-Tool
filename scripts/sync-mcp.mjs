@@ -62,7 +62,27 @@ if (!existsSync(SERVERS_FILE)) {
   err(`servers.json not found: ${SERVERS_FILE}`)
   process.exit(1)
 }
-const { servers } = JSON.parse(readFileSync(SERVERS_FILE, 'utf8'))
+
+let servers = {}
+try {
+  const parsed = JSON.parse(readFileSync(SERVERS_FILE, 'utf8'))
+  if (!parsed || typeof parsed !== 'object' || !parsed.servers || typeof parsed.servers !== 'object') {
+    err(`servers.json is invalid: Must contain a top-level "servers" object.`)
+    process.exit(1)
+  }
+  servers = parsed.servers
+
+  // Basic structural validation for each server
+  for (const [name, config] of Object.entries(servers)) {
+    if (!config.url && (!config.command || !Array.isArray(config.command))) {
+      err(`servers.json is invalid: Server '${name}' must have either a 'url' string or a 'command' array.`)
+      process.exit(1)
+    }
+  }
+} catch (e) {
+  err(`Failed to parse servers.json: ${e.message}`)
+  process.exit(1)
+}
 
 // ─── Resolve binary absolute path ────────────────────────────────────────────
 function resolveBin(cmd) {
@@ -296,16 +316,29 @@ async function syncCodex() {
 
 
 // ─── Write helpers ────────────────────────────────────────────────────────────
+function backupIfNeeded(file) {
+  if (existsSync(file)) {
+    try {
+      const raw = readFileSync(file, 'utf8')
+      writeFileSync(file + '.bak', raw, 'utf8')
+    } catch (e) {
+      warn(`Failed to backup ${file}: ${e.message}`)
+    }
+  }
+}
+
 function writeJson(file, data, label) {
   mkdirSync(dirname(file), { recursive: true })
+  backupIfNeeded(file)
   writeFileSync(file, JSON.stringify(data, null, 2) + '\n', 'utf8')
-  ok(`${label} → ${file}`)
+  ok(`${label} → ${file} (backed up to .bak)`)
 }
 
 function writeText(file, data, label) {
   mkdirSync(dirname(file), { recursive: true })
+  backupIfNeeded(file)
   writeFileSync(file, data, 'utf8')
-  ok(`${label} → ${file}`)
+  ok(`${label} → ${file} (backed up to .bak)`)
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
