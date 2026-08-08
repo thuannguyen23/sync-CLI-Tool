@@ -349,10 +349,21 @@ function writeText(file, data, label) {
   const cursorFile   = join(HOME, '.cursor/mcp.json')
   const opencodeFile = join(HOME, '.config/opencode/opencode.json')
 
-  try { writeJson(agyFile,      buildAgy(),      'AGY CLI  ') } catch(e) { err(`AGY: ${e.message}`) }
-  try { writeJson(cursorFile,   buildCursor(),   'Cursor   ') } catch(e) { err(`Cursor: ${e.message}`) }
-  try { writeJson(opencodeFile, buildOpenCode(), 'OpenCode ') } catch(e) { err(`OpenCode: ${e.message}`) }
-  try { await syncCodex() }                                    catch(e) { err(`Codex: ${e.message}`) }
+  if (!process.env.SKIP_AGY) {
+    try { writeJson(agyFile,      buildAgy(),      'AGY CLI  ') } catch(e) { err(`AGY: ${e.message}`) }
+  } else { info('AGY CLI   → skipped (user opted out)') }
+
+  if (!process.env.SKIP_CURSOR) {
+    try { writeJson(cursorFile,   buildCursor(),   'Cursor   ') } catch(e) { err(`Cursor: ${e.message}`) }
+  } else { info('Cursor    → skipped (user opted out)') }
+
+  if (!process.env.SKIP_OPENCODE) {
+    try { writeJson(opencodeFile, buildOpenCode(), 'OpenCode ') } catch(e) { err(`OpenCode: ${e.message}`) }
+  } else { info('OpenCode  → skipped (user opted out)') }
+
+  if (!process.env.SKIP_CODEX) {
+    try { await syncCodex() }                                    catch(e) { err(`Codex: ${e.message}`) }
+  } else { info('Codex     → skipped (user opted out)') }
 
   console.log('\n✨ MCP sync complete.\n')
 })()

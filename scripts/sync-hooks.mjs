@@ -362,9 +362,9 @@ if (!HAS_CTX) {
   info('Rules/skills symlinks will be skipped; hooks will still be configured')
 }
 
-try { syncCursor(ctxPkgDir) }  catch (e) { err(`Cursor: ${e.message}`) }
-try { syncAgy(ctxPkgDir) }     catch (e) { err(`AGY: ${e.message}`) }
-try { syncCodex() }            catch (e) { err(`Codex: ${e.message}`) }
-try { syncOpenCode() }         catch (e) { err(`OpenCode: ${e.message}`) }
+if (!process.env.SKIP_CURSOR) { try { syncCursor(ctxPkgDir) }  catch (e) { err(`Cursor: ${e.message}`) } } else { info('Cursor   hooks → skipped') }
+if (!process.env.SKIP_AGY) { try { syncAgy(ctxPkgDir) }     catch (e) { err(`AGY: ${e.message}`) } } else { info('AGY      hooks → skipped') }
+if (!process.env.SKIP_CODEX) { try { syncCodex() }            catch (e) { err(`Codex: ${e.message}`) } } else { info('Codex    hooks → skipped') }
+if (!process.env.SKIP_OPENCODE) { try { syncOpenCode() }         catch (e) { err(`OpenCode: ${e.message}`) } } else { info('OpenCode hooks → skipped') }
 
 console.log('\n✨ Hooks sync complete.\n')

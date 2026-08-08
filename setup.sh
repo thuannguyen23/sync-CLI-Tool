@@ -28,9 +28,48 @@ info()    { echo -e "${DIM}   $1${NC}"; }
 section() { echo -e "\n${BOLD}━━ $1 ━━${NC}"; }
 has()     { command -v "$1" &>/dev/null; }
 
+ask_install() {
+  local name=$1
+  local found=$2
+
+  if [ "$found" = true ]; then
+    echo -ne "${YELLOW}Found $name. Do you want to sync configs for it? [Y/n] ${NC}"
+  else
+    echo -ne "${DIM}$name not found. Do you still want to install configs for it? [y/N] ${NC}"
+  fi
+
+  read -r response
+  response=${response,,} # tolower
+
+  if [ "$found" = true ]; then
+    if [[ "$response" =~ ^(n|no)$ ]]; then
+      return 1
+    else
+      return 0
+    fi
+  else
+    if [[ "$response" =~ ^(y|yes)$ ]]; then
+      return 0
+    else
+      return 1
+    fi
+  fi
+}
+
 echo ""
 echo -e "${BOLD}🚀 sync-CLI-Tool setup${NC}"
 echo "=============================="
+
+echo -e "\n${BOLD}━━ Interactive Selection ━━${NC}"
+[ -d "$HOME_DIR/.gemini" ] && agy_found=true || agy_found=false
+[ -d "$HOME_DIR/.cursor" ] || [ -d "$HOME_DIR/.config/Cursor" ] && cursor_found=true || cursor_found=false
+has codex || [ -d "$HOME_DIR/.codex" ] && codex_found=true || codex_found=false
+has opencode || [ -d "$HOME_DIR/.config/opencode" ] && opencode_found=true || opencode_found=false
+
+ask_install "AGY (Gemini)" $agy_found || export SKIP_AGY=1
+ask_install "Cursor" $cursor_found || export SKIP_CURSOR=1
+ask_install "Codex" $codex_found || export SKIP_CODEX=1
+ask_install "OpenCode" $opencode_found || export SKIP_OPENCODE=1
 
 # ─── Step 0: ~/.agents symlink ───────────────────────────────────────────────
 # Many tools (OpenCode, etc.) expect skills at ~/.agents/skills/
@@ -72,47 +111,59 @@ SKILLS_SRC="$AGENTS_DIR/skills"
 
 # AGY CLI: symlink individual user skills INTO ~/.gemini/config/skills/
 # (Do NOT replace whole dir — AGY has 100+ built-in skills there)
-mkdir -p "$HOME_DIR/.gemini/config/skills"
-for skill_dir in "$SKILLS_SRC"/*/; do
-  skill_name="$(basename "$skill_dir")"
-  target="$HOME_DIR/.gemini/config/skills/$skill_name"
-  if [ ! -e "$target" ]; then
-    ln -sfn "$skill_dir" "$target"
-    ok "AGY skill linked: $skill_name"
-  else
-    info "AGY skill exists: $skill_name"
-  fi
-done
-find "$HOME_DIR/.gemini/config/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+if [ -z "${SKIP_AGY:-}" ]; then
+  mkdir -p "$HOME_DIR/.gemini/config/skills"
+  for skill_dir in "$SKILLS_SRC"/*/; do
+    skill_name="$(basename "$skill_dir")"
+    target="$HOME_DIR/.gemini/config/skills/$skill_name"
+    if [ ! -e "$target" ]; then
+      ln -sfn "$skill_dir" "$target"
+      ok "AGY skill linked: $skill_name"
+    else
+      info "AGY skill exists: $skill_name"
+    fi
+  done
+  find "$HOME_DIR/.gemini/config/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+else
+  info "AGY skills sync skipped."
+fi
 
 # Cursor: ~/.config/Cursor/User/skills → ~/.agents/skills
-mkdir -p "$HOME_DIR/.config/Cursor/User"
-if [ -L "$HOME_DIR/.config/Cursor/User/skills" ]; then
-  ok "Cursor skills symlink already exists"
-elif [ -d "$HOME_DIR/.config/Cursor/User/skills" ] && [ ! -L "$HOME_DIR/.config/Cursor/User/skills" ]; then
-  warn "Cursor: skills dir exists (real) — moving to .bak"
-  mv "$HOME_DIR/.config/Cursor/User/skills" "$HOME_DIR/.config/Cursor/User/skills.bak"
-  ln -s "$SKILLS_SRC" "$HOME_DIR/.config/Cursor/User/skills"
-  ok "Cursor skills → $SKILLS_SRC (old dir backed up)"
+if [ -z "${SKIP_CURSOR:-}" ]; then
+  mkdir -p "$HOME_DIR/.config/Cursor/User"
+  if [ -L "$HOME_DIR/.config/Cursor/User/skills" ]; then
+    ok "Cursor skills symlink already exists"
+  elif [ -d "$HOME_DIR/.config/Cursor/User/skills" ] && [ ! -L "$HOME_DIR/.config/Cursor/User/skills" ]; then
+    warn "Cursor: skills dir exists (real) — moving to .bak"
+    mv "$HOME_DIR/.config/Cursor/User/skills" "$HOME_DIR/.config/Cursor/User/skills.bak"
+    ln -s "$SKILLS_SRC" "$HOME_DIR/.config/Cursor/User/skills"
+    ok "Cursor skills → $SKILLS_SRC (old dir backed up)"
+  else
+    ln -sfn "$SKILLS_SRC" "$HOME_DIR/.config/Cursor/User/skills"
+    ok "Cursor skills → $SKILLS_SRC"
+  fi
 else
-  ln -sfn "$SKILLS_SRC" "$HOME_DIR/.config/Cursor/User/skills"
-  ok "Cursor skills → $SKILLS_SRC"
+  info "Cursor skills sync skipped."
 fi
 
 # Codex: ~/.codex/skills contents → symlink individual skills
 # (Codex reads ~/.agents/skills natively if configured, but symlink is safer)
-mkdir -p "$HOME_DIR/.codex/skills"
-for skill_dir in "$SKILLS_SRC"/*/; do
-  skill_name="$(basename "$skill_dir")"
-  target="$HOME_DIR/.codex/skills/$skill_name"
-  if [ ! -e "$target" ]; then
-    ln -sfn "$skill_dir" "$target"
-    ok "Codex skill: $skill_name"
-  else
-    info "Codex skill already exists: $skill_name"
-  fi
-done
-find "$HOME_DIR/.codex/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+if [ -z "${SKIP_CODEX:-}" ]; then
+  mkdir -p "$HOME_DIR/.codex/skills"
+  for skill_dir in "$SKILLS_SRC"/*/; do
+    skill_name="$(basename "$skill_dir")"
+    target="$HOME_DIR/.codex/skills/$skill_name"
+    if [ ! -e "$target" ]; then
+      ln -sfn "$skill_dir" "$target"
+      ok "Codex skill: $skill_name"
+    else
+      info "Codex skill already exists: $skill_name"
+    fi
+  done
+  find "$HOME_DIR/.codex/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+else
+  info "Codex skills sync skipped."
+fi
 
 # OpenCode reads ~/.agents/skills natively (Agent Skills spec)
 ok "OpenCode skills: reads ~/.agents/skills natively (no symlink needed)"
@@ -122,43 +173,51 @@ section "4 / 7  AGENTS.md (global instructions)"
 AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
 
 # AGY
-mkdir -p "$HOME_DIR/.gemini/config"
-ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/config/AGENTS.md"
-ok "AGY AGENTS.md → $AGENTS_MD"
+if [ -z "${SKIP_AGY:-}" ]; then
+  mkdir -p "$HOME_DIR/.gemini/config"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/config/AGENTS.md"
+  ok "AGY AGENTS.md → $AGENTS_MD"
+fi
 
 # OpenCode
-mkdir -p "$HOME_DIR/.config/opencode"
-ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/opencode/AGENTS.md"
-ok "OpenCode AGENTS.md → $AGENTS_MD"
+if [ -z "${SKIP_OPENCODE:-}" ]; then
+  mkdir -p "$HOME_DIR/.config/opencode"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/opencode/AGENTS.md"
+  ok "OpenCode AGENTS.md → $AGENTS_MD"
+fi
 
 # Codex: use the canonical policy directly. A symlink avoids relying on
 # undocumented include expansion inside the global AGENTS.md file.
-mkdir -p "$HOME_DIR/.codex"
-ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
-ok "Codex AGENTS.md → $AGENTS_MD"
+if [ -z "${SKIP_CODEX:-}" ]; then
+  mkdir -p "$HOME_DIR/.codex"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
+  ok "Codex AGENTS.md → $AGENTS_MD"
+fi
 
 # Cursor: file-backed global rules are distributed as a local plugin.
 # This avoids modifying Cursor's cloud-managed User Rules or internal database.
-CURSOR_PLUGIN_SRC="$AGENTS_DIR/plugins/cursor"
-CURSOR_PLUGIN_DST="$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
-mkdir -p "$HOME_DIR/.cursor/plugins/local"
+if [ -z "${SKIP_CURSOR:-}" ]; then
+  CURSOR_PLUGIN_SRC="$AGENTS_DIR/plugins/cursor"
+  CURSOR_PLUGIN_DST="$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
+  mkdir -p "$HOME_DIR/.cursor/plugins/local"
 
-if [ -L "$CURSOR_PLUGIN_DST" ]; then
-  ln -sfn "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
-  ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
-elif [ -e "$CURSOR_PLUGIN_DST" ]; then
-  CURSOR_PLUGIN_BACKUP="$CURSOR_PLUGIN_DST.bak"
-  if [ -e "$CURSOR_PLUGIN_BACKUP" ] || [ -L "$CURSOR_PLUGIN_BACKUP" ]; then
-    err "Cursor plugin backup already exists: $CURSOR_PLUGIN_BACKUP"
-    err "Move or remove it, then re-run setup.sh"
+  if [ -L "$CURSOR_PLUGIN_DST" ]; then
+    ln -sfn "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
+    ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
+  elif [ -e "$CURSOR_PLUGIN_DST" ]; then
+    CURSOR_PLUGIN_BACKUP="$CURSOR_PLUGIN_DST.bak"
+    if [ -e "$CURSOR_PLUGIN_BACKUP" ] || [ -L "$CURSOR_PLUGIN_BACKUP" ]; then
+      err "Cursor plugin backup already exists: $CURSOR_PLUGIN_BACKUP"
+      err "Move or remove it, then re-run setup.sh"
+    else
+      mv "$CURSOR_PLUGIN_DST" "$CURSOR_PLUGIN_BACKUP"
+      ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
+      ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC (old plugin backed up)"
+    fi
   else
-    mv "$CURSOR_PLUGIN_DST" "$CURSOR_PLUGIN_BACKUP"
     ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
-    ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC (old plugin backed up)"
+    ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
   fi
-else
-  ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
-  ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
 fi
 
 # ─── Step 5: RTK (Rust Token Killer) ─────────────────────────────────────────
@@ -170,30 +229,38 @@ fi
 section "5 / 7  RTK (Rust Token Killer)"
 if has rtk; then
   # Cursor: merge RTK hook into hooks.json (hook-only = no RTK.md clutter)
-  rtk init -g --agent cursor --hook-only --auto-patch 2>/dev/null \
-    && ok "RTK → Cursor (hook merged into hooks.json)" \
-    || info "RTK → Cursor (already configured)"
+  if [ -z "${SKIP_CURSOR:-}" ]; then
+    rtk init -g --agent cursor --hook-only --auto-patch 2>/dev/null \
+      && ok "RTK → Cursor (hook merged into hooks.json)" \
+      || info "RTK → Cursor (already configured)"
+  fi
 
   # Codex: create RTK.md instruction file
-  rtk init -g --codex --auto-patch 2>/dev/null \
-    && ok "RTK → Codex (RTK.md created)" \
-    || info "RTK → Codex (already configured)"
-  # Re-symlink AGENTS.md — rtk init --codex may have overwritten our symlink
-  AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
+  if [ -z "${SKIP_CODEX:-}" ]; then
+    rtk init -g --codex --auto-patch 2>/dev/null \
+      && ok "RTK → Codex (RTK.md created)" \
+      || info "RTK → Codex (already configured)"
+    # Re-symlink AGENTS.md — rtk init --codex may have overwritten our symlink
+    AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
+    ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
+  fi
 
   # AGY: create rules markdown file (project-scoped, run from repo dir)
-  (cd "$AGENTS_DIR" && rtk init --agent antigravity --auto-patch 2>/dev/null) \
-    && ok "RTK → AGY (rules file created)" \
-    || info "RTK → AGY (already configured)"
+  if [ -z "${SKIP_AGY:-}" ]; then
+    (cd "$AGENTS_DIR" && rtk init --agent antigravity --auto-patch 2>/dev/null) \
+      && ok "RTK → AGY (rules file created)" \
+      || info "RTK → AGY (already configured)"
+  fi
 
   # OpenCode: symlink rtk.ts plugin from repo (NOT rtk init, to preserve
   # the version-controlled plugin in sync-CLI-Tool/plugins/opencode/rtk.ts)
-  RTK_SRC="$AGENTS_DIR/plugins/opencode/rtk.ts"
-  RTK_DST="$HOME_DIR/.config/opencode/plugins/rtk.ts"
-  mkdir -p "$(dirname "$RTK_DST")"
-  ln -sfn "$RTK_SRC" "$RTK_DST"
-  ok "RTK → OpenCode (plugin symlink)"
+  if [ -z "${SKIP_OPENCODE:-}" ]; then
+    RTK_SRC="$AGENTS_DIR/plugins/opencode/rtk.ts"
+    RTK_DST="$HOME_DIR/.config/opencode/plugins/rtk.ts"
+    mkdir -p "$(dirname "$RTK_DST")"
+    ln -sfn "$RTK_SRC" "$RTK_DST"
+    ok "RTK → OpenCode (plugin symlink)"
+  fi
 else
   warn "rtk not found — skipping RTK setup for all agents"
   info "Install RTK: cargo install rtk"
