@@ -317,7 +317,7 @@ async function syncCodex() {
 
 // ─── Write helpers ────────────────────────────────────────────────────────────
 function backupIfNeeded(file) {
-  if (existsSync(file)) {
+  if (existsSync(file) && !existsSync(file + '.bak')) {
     try {
       const raw = readFileSync(file, 'utf8')
       writeFileSync(file + '.bak', raw, 'utf8')

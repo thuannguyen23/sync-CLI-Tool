@@ -44,8 +44,18 @@ function readJSON(path) {
   catch { return null }
 }
 
+function backupIfNeeded(path) {
+  if (existsSync(path) && !existsSync(path + '.bak')) {
+    try {
+      const raw = readFileSync(path, 'utf8')
+      writeFileSync(path + '.bak', raw, 'utf8')
+    } catch (e) { /* ignore */ }
+  }
+}
+
 function writeJSON(path, data) {
   mkdirSync(dirname(path), { recursive: true })
+  backupIfNeeded(path)
   writeFileSync(path, JSON.stringify(data, null, 2) + '\n')
 }
 
