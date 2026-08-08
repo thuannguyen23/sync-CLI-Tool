@@ -143,6 +143,8 @@ impact before editing the contract.
 A full Codegraph analysis is unnecessary only when repository evidence proves
 that the change is private, file-local, and has no external contract.
 
+> **Note on Uninitialized Projects:** If you are working in a repository that does not have a `.codegraph/` directory, the Codegraph MCP server will fail. In this case, you MUST first run `codegraph init` (and follow it up with a build/index if required by the CLI) to initialize the project before using its tools.
+
 If Codegraph is unavailable, stale, unsupported, or cannot resolve the target,
 use this fallback order:
 
