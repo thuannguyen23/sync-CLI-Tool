@@ -6,7 +6,16 @@ set -euo pipefail
 
 HOME_DIR="$HOME"
 # Ensure we resolve the real path so that deleting ~/.agents symlink doesn't break subsequent paths
-AGENTS_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+get_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+    source="$(readlink "$source")"
+    [[ $source != /* ]] && source="$dir/$source"
+  done
+  echo "$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+}
+AGENTS_DIR="$(get_script_dir)"
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
 ok()      { echo -e "${GREEN}✅ $1${NC}"; }
@@ -15,6 +24,32 @@ err()     { echo -e "${RED}❌ $1${NC}"; }
 info()    { echo -e "${DIM}   $1${NC}"; }
 section() { echo -e "\n${BOLD}━━ $1 ━━${NC}"; }
 has()     { command -v "$1" &>/dev/null; }
+
+show_help() {
+  echo "Usage: ./teardown.sh [OPTIONS]"
+  echo "Options:"
+  echo "  -f, --force    Run without asking for confirmation"
+  echo "  -h, --help     Show this help message"
+  exit 0
+}
+
+FORCE=0
+for arg in "$@"; do
+  case $arg in
+    -f|--force) FORCE=1 ;;
+    -h|--help)  show_help ;;
+    *)          warn "Unknown option: $arg"; show_help ;;
+  esac
+done
+
+if [ "$FORCE" -eq 0 ]; then
+  echo -ne "${RED}❌ WARNING: This will remove all managed symlinks and restore configs from .bak files. Are you sure? [y/N] ${NC}"
+  read -r response
+  if [[ ! "$response" =~ ^(y|Y|yes|Yes)$ ]]; then
+    info "Teardown aborted."
+    exit 0
+  fi
+fi
 
 remove_symlink() {
   local target="$1"

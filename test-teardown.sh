@@ -9,14 +9,14 @@ HOME_DIR="$HOME"
 
 echo "--- 1. PREPARING ENVIRONMENT (Faking user configs) ---"
 # Make sure we are clean first
-"$AGENTS_DIR/teardown.sh" >/dev/null 2>&1 || true
+"$AGENTS_DIR/teardown.sh" --force >/dev/null 2>&1 || true
 
 mkdir -p "$HOME_DIR/.cursor"
 echo '{"test":"original_mcp"}' > "$HOME_DIR/.cursor/mcp.json"
 
 echo "--- 2. RUNNING SETUP ---"
 cd "$AGENTS_DIR"
-echo -e "y\ny\ny\ny\n" | ./setup.sh >/dev/null 2>&1 || true
+./setup.sh --silent >/dev/null 2>&1 || true
 
 echo "--- 3. POST-SETUP ASSERTIONS ---"
 if [ ! -L "$HOME_DIR/.agents" ]; then echo "FAIL: ~/.agents symlink not created"; exit 1; fi
@@ -24,7 +24,7 @@ if [ ! -f "$HOME_DIR/.cursor/mcp.json.bak" ]; then echo "FAIL: mcp.json.bak not 
 echo "✅ Setup assertions passed."
 
 echo "--- 4. RUNNING TEARDOWN ---"
-./teardown.sh
+./teardown.sh --force
 
 echo "--- 5. POST-TEARDOWN ASSERTIONS ---"
 if [ -L "$HOME_DIR/.agents" ]; then echo "FAIL: ~/.agents symlink still exists"; exit 1; fi

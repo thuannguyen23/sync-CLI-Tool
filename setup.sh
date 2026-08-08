@@ -17,7 +17,17 @@
 
 set -euo pipefail
 
-AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+resolve_symlink() {
+  local target="$1"
+  while [ -L "$target" ]; do
+    local dir="$(cd -P "$(dirname "$target")" >/dev/null 2>&1 && pwd)"
+    target="$(readlink "$target")"
+    [[ $target != /* ]] && target="$dir/$target"
+  done
+  echo "$(cd -P "$(dirname "$target")" >/dev/null 2>&1 && pwd)"
+}
+
+AGENTS_DIR="$(resolve_symlink "${BASH_SOURCE[0]}")"
 HOME_DIR="$HOME"
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
@@ -28,9 +38,36 @@ info()    { echo -e "${DIM}   $1${NC}"; }
 section() { echo -e "\n${BOLD}━━ $1 ━━${NC}"; }
 has()     { command -v "$1" &>/dev/null; }
 
+show_help() {
+  echo "Usage: ./setup.sh [OPTIONS]"
+  echo "Options:"
+  echo "  -s, --silent   Run without interactive prompts (defaults to yes for sync if tool found)"
+  echo "  -h, --help     Show this help message"
+  exit 0
+}
+
+SILENT=0
+for arg in "$@"; do
+  case $arg in
+    -s|--silent) SILENT=1 ;;
+    -h|--help)   show_help ;;
+    *)           warn "Unknown option: $arg"; show_help ;;
+  esac
+done
+
 ask_install() {
   local name=$1
   local found=$2
+
+  if [ "$SILENT" -eq 1 ]; then
+    if [ "$found" = true ]; then
+      info "Silent mode: Auto-syncing configs for $name"
+      return 0
+    else
+      info "Silent mode: Skipping $name (not found)"
+      return 1
+    fi
+  fi
 
   if [ "$found" = true ]; then
     echo -ne "${YELLOW}Found $name. Do you want to sync configs for it? [Y/n] ${NC}"
@@ -74,7 +111,7 @@ ask_install "OpenCode" $opencode_found || export SKIP_OPENCODE=1
 # ─── Step 0: ~/.agents symlink ───────────────────────────────────────────────
 # Many tools (OpenCode, etc.) expect skills at ~/.agents/skills/
 # We create ~/.agents as a symlink → wherever this repo actually lives.
-if [ -L "$HOME_DIR/.agents" ] && [ "$(readlink -f "$HOME_DIR/.agents")" = "$AGENTS_DIR" ]; then
+if [ -L "$HOME_DIR/.agents" ] && [ "$(resolve_symlink "$HOME_DIR/.agents")" = "$AGENTS_DIR" ]; then
   info "~/.agents → $AGENTS_DIR (already correct)"
 elif [ -e "$HOME_DIR/.agents" ] && [ ! -L "$HOME_DIR/.agents" ]; then
   warn "~/.agents exists as a real directory — backing up to ~/.agents.bak"
@@ -307,4 +344,10 @@ echo -e "  ${DIM}3. git -C ~/.agents push${NC}"
 echo ""
 echo "  On a new machine:"
 echo -e "  ${DIM}git clone <your-dotfiles-repo> ~/.agents && ~/.agents/setup.sh${NC}"
+echo ""
+
+if has npm; then
+  echo -e "${BOLD}━━ Health Check ━━${NC}"
+  (cd "$AGENTS_DIR" && npm run health)
+fi
 echo ""
