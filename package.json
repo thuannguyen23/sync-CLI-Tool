@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "test:teardown": "./test-teardown.sh",
     "sync": "node scripts/sync-mcp.mjs && node scripts/sync-hooks.mjs",
     "health": "node scripts/health-check.mjs",
-    "setup": "./setup.sh"
+    "setup": "./setup.sh",
+    "teardown": "./teardown.sh"
   },
   "private": true
 }
