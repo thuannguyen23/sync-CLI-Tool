@@ -13,6 +13,14 @@ nano ~/.agents/secrets.env          # fill in API keys
 
 That's it. The script automatically checks and installs `nvm/node`, `uv/uvx`, `rtk`, and `codegraph` if they are missing.
 
+## Uninstallation
+
+If you want to cleanly remove the CLI integration and safely restore your original IDE configuration files from backups:
+
+```bash
+~/.agents/teardown.sh
+```
+
 ## When Adding a New MCP
 
 ```bash
@@ -28,6 +36,8 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 ```
 ~/.agents/
 ├── setup.sh                    # Entry point — run for the first time on a new machine
+├── teardown.sh                 # Safely removes all managed symlinks and restores backups
+├── test-teardown.sh            # Automated verification suite for the setup/teardown cycle
 ├── secrets.env.example         # Template (safe to commit)
 ├── secrets.env                 # Gitignored — contains actual values
 │
