@@ -89,6 +89,8 @@ fi
 # 2. Global Rules (AGENTS.md)
 section "2 / 5  Global Rules"
 remove_symlink "$HOME_DIR/.gemini/config/AGENTS.md"
+remove_symlink "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
+remove_symlink "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/opencode/AGENTS.md"
 remove_symlink "$HOME_DIR/.codex/AGENTS.md"
 remove_symlink "$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
@@ -112,10 +114,16 @@ if [ -d "$AGENTS_DIR/skills" ]; then
     [ -d "$skill_dir" ] || continue
     skill_name="$(basename "$skill_dir")"
     
-    # Remove from AGY
+    # Remove from AGY (Global, CLI, IDE)
     if [ -L "$HOME_DIR/.gemini/config/skills/$skill_name" ]; then
        rm "$HOME_DIR/.gemini/config/skills/$skill_name"
-       ok "Removed AGY skill symlink: $skill_name"
+       ok "Removed AGY skill symlink (Global): $skill_name"
+    fi
+    if [ -L "$HOME_DIR/.gemini/antigravity-cli/skills/$skill_name" ]; then
+       rm "$HOME_DIR/.gemini/antigravity-cli/skills/$skill_name"
+    fi
+    if [ -L "$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name" ]; then
+       rm "$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name"
     fi
     
     # Remove from Codex
@@ -133,6 +141,8 @@ remove_symlink "$HOME_DIR/.config/opencode/plugins/rtk.ts"
 restore_bak "$HOME_DIR/.cursor/mcp.json"
 restore_bak "$HOME_DIR/.cursor/hooks.json"
 restore_bak "$HOME_DIR/.gemini/config/mcp_config.json"
+restore_bak "$HOME_DIR/.gemini/antigravity-cli/mcp_config.json"
+restore_bak "$HOME_DIR/.gemini/antigravity-ide/mcp_config.json"
 restore_bak "$HOME_DIR/.gemini/config/hooks.json"
 restore_bak "$HOME_DIR/.codex/hooks.json"
 restore_bak "$HOME_DIR/.config/opencode/opencode.json"

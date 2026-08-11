@@ -264,16 +264,26 @@ function syncAgy(ctxPkgDir) {
   // skill files as local plugin content and does not request access to npm's
   // global installation directory in headless sessions.
   const pluginSrc = join(ctxPkgDir, 'configs', 'antigravity-cli')
-  const pluginDst = join(HOME, '.gemini', 'config', 'plugins', 'context-mode')
+  const pluginDstGlobal = join(HOME, '.gemini', 'config', 'plugins', 'context-mode')
+  const pluginDstCli    = join(HOME, '.gemini', 'antigravity-cli', 'plugins', 'context-mode')
+  const pluginDstIde    = join(HOME, '.gemini', 'antigravity-ide', 'plugins', 'context-mode')
+
   if (!existsSync(join(pluginSrc, 'plugin.json'))) {
     warn(`AGY      context-mode plugin is incomplete: ${pluginSrc}`)
     return
   }
 
-  cpSync(pluginSrc, pluginDst, { recursive: true, force: true })
-  normalizeAgyContextRule(pluginDst)
+  // Deploy to all three possible locations for Antigravity v1 and v2.0+ decoupled paths
+  cpSync(pluginSrc, pluginDstGlobal, { recursive: true, force: true })
+  cpSync(pluginSrc, pluginDstCli,    { recursive: true, force: true })
+  cpSync(pluginSrc, pluginDstIde,    { recursive: true, force: true })
+
+  normalizeAgyContextRule(pluginDstGlobal)
+  normalizeAgyContextRule(pluginDstCli)
+  normalizeAgyContextRule(pluginDstIde)
+
   allowAgyManagedSkillReads()
-  ok('AGY      context-mode plugin installed')
+  ok('AGY      context-mode plugin installed (Global, CLI, IDE)')
 }
 
 // ─── 3. Codex CLI ───────────────────────────────────────────────────────────

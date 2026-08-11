@@ -345,13 +345,20 @@ function writeText(file, data, label) {
 ;(async () => {
   console.log('\n🔌 Syncing MCP configs from servers.json...\n')
 
-  const agyFile      = join(HOME, '.gemini/config/mcp_config.json')
-  const cursorFile   = join(HOME, '.cursor/mcp.json')
-  const opencodeFile = join(HOME, '.config/opencode/opencode.json')
+  const agyFileGlobal  = join(HOME, '.gemini/config/mcp_config.json')
+  const agyFileCli     = join(HOME, '.gemini/antigravity-cli/mcp_config.json')
+  const agyFileIde     = join(HOME, '.gemini/antigravity-ide/mcp_config.json')
+  const cursorFile     = join(HOME, '.cursor/mcp.json')
+  const opencodeFile   = join(HOME, '.config/opencode/opencode.json')
 
   if (!process.env.SKIP_AGY) {
-    try { writeJson(agyFile,      buildAgy(),      'AGY CLI  ') } catch(e) { err(`AGY: ${e.message}`) }
-  } else { info('AGY CLI   → skipped (user opted out)') }
+    try { 
+      const agyData = buildAgy()
+      writeJson(agyFileGlobal, agyData, 'AGY (Global)')
+      writeJson(agyFileCli,    agyData, 'AGY (CLI)   ')
+      writeJson(agyFileIde,    agyData, 'AGY (IDE)   ')
+    } catch(e) { err(`AGY: ${e.message}`) }
+  } else { info('AGY       → skipped (user opted out)') }
 
   if (!process.env.SKIP_CURSOR) {
     try { writeJson(cursorFile,   buildCursor(),   'Cursor   ') } catch(e) { err(`Cursor: ${e.message}`) }

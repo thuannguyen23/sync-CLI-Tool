@@ -146,21 +146,29 @@ fi
 section "3 / 7  Skills (symlinks)"
 SKILLS_SRC="$AGENTS_DIR/skills"
 
-# AGY CLI: symlink individual user skills INTO ~/.gemini/config/skills/
+# AGY CLI & IDE: symlink individual user skills INTO ~/.gemini/*/skills/
 # (Do NOT replace whole dir — AGY has 100+ built-in skills there)
 if [ -z "${SKIP_AGY:-}" ]; then
   mkdir -p "$HOME_DIR/.gemini/config/skills"
+  mkdir -p "$HOME_DIR/.gemini/antigravity-cli/skills"
+  mkdir -p "$HOME_DIR/.gemini/antigravity-ide/skills"
   for skill_dir in "$SKILLS_SRC"/*/; do
     skill_name="$(basename "$skill_dir")"
-    target="$HOME_DIR/.gemini/config/skills/$skill_name"
-    if [ ! -e "$target" ]; then
-      ln -sfn "$skill_dir" "$target"
-      ok "AGY skill linked: $skill_name"
-    else
-      info "AGY skill exists: $skill_name"
-    fi
+    
+    target_global="$HOME_DIR/.gemini/config/skills/$skill_name"
+    if [ ! -e "$target_global" ]; then ln -sfn "$skill_dir" "$target_global"; fi
+    
+    target_cli="$HOME_DIR/.gemini/antigravity-cli/skills/$skill_name"
+    if [ ! -e "$target_cli" ]; then ln -sfn "$skill_dir" "$target_cli"; fi
+    
+    target_ide="$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name"
+    if [ ! -e "$target_ide" ]; then ln -sfn "$skill_dir" "$target_ide"; fi
+    
+    ok "AGY skill linked (Global, CLI, IDE): $skill_name"
   done
   find "$HOME_DIR/.gemini/config/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  find "$HOME_DIR/.gemini/antigravity-cli/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  find "$HOME_DIR/.gemini/antigravity-ide/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 else
   info "AGY skills sync skipped."
 fi
@@ -212,8 +220,14 @@ AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
 # AGY
 if [ -z "${SKIP_AGY:-}" ]; then
   mkdir -p "$HOME_DIR/.gemini/config"
+  mkdir -p "$HOME_DIR/.gemini/antigravity-cli"
+  mkdir -p "$HOME_DIR/.gemini/antigravity-ide"
+  
   ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/config/AGENTS.md"
-  ok "AGY AGENTS.md → $AGENTS_MD"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
+  
+  ok "AGY AGENTS.md → $AGENTS_MD (Global, CLI, IDE)"
 fi
 
 # OpenCode
