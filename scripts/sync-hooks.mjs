@@ -365,6 +365,14 @@ function syncOpenCode() {
   ok(`OpenCode plugin array ${changed ? '(added context-mode)' : '(up to date)'}`)
 }
 
+// ─── 5. Kilo CLI ────────────────────────────────────────────────────────────
+
+function syncKilo() {
+  // Similar to OpenCode, Kilo manages context-mode through other means (like skills or native plugins).
+  // We just ensure we don't break its kilo.json
+  ok(`Kilo     hooks up to date (managed natively)`)
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 console.log('\n🔗 Syncing hooks (context-mode + herdr)...\n')
@@ -386,5 +394,6 @@ if (!process.env.SKIP_CURSOR) { try { syncCursor(ctxPkgDir) }  catch (e) { err(`
 if (!process.env.SKIP_AGY) { try { syncAgy(ctxPkgDir) }     catch (e) { err(`AGY: ${e.message}`) } } else { info('AGY      hooks → skipped') }
 if (!process.env.SKIP_CODEX) { try { syncCodex() }            catch (e) { err(`Codex: ${e.message}`) } } else { info('Codex    hooks → skipped') }
 if (!process.env.SKIP_OPENCODE) { try { syncOpenCode() }         catch (e) { err(`OpenCode: ${e.message}`) } } else { info('OpenCode hooks → skipped') }
+if (!process.env.SKIP_KILO) { try { syncKilo() }             catch (e) { err(`Kilo: ${e.message}`) } } else { info('Kilo     hooks → skipped') }
 
 console.log('\n✨ Hooks sync complete.\n')

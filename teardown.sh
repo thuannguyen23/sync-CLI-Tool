@@ -92,6 +92,7 @@ remove_symlink "$HOME_DIR/.gemini/config/AGENTS.md"
 remove_symlink "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
 remove_symlink "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/opencode/AGENTS.md"
+remove_symlink "$HOME_DIR/.config/kilo/AGENTS.md"
 remove_symlink "$HOME_DIR/.codex/AGENTS.md"
 remove_symlink "$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
 if [ -e "$HOME_DIR/.cursor/plugins/local/sync-cli-tool.bak" ]; then
@@ -146,6 +147,8 @@ restore_bak "$HOME_DIR/.gemini/antigravity-ide/mcp_config.json"
 restore_bak "$HOME_DIR/.gemini/config/hooks.json"
 restore_bak "$HOME_DIR/.codex/hooks.json"
 restore_bak "$HOME_DIR/.config/opencode/opencode.json"
+restore_bak "$HOME_DIR/.config/kilo/kilo.json"
+restore_bak "$HOME_DIR/.config/kilo/kilo.jsonc"
 
 # 5. Codex MCP
 section "5 / 5  Codex MCP Servers"

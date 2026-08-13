@@ -1,7 +1,7 @@
 {
   "name": "sync-cli-tool",
   "version": "1.0.0",
-  "description": "Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to AGY, Codex, OpenCode, and Cursor",
+  "description": "Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to AGY, Codex, OpenCode, Cursor, and Kilo",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",

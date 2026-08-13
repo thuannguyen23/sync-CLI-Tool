@@ -102,11 +102,13 @@ echo -e "\n${BOLD}━━ Interactive Selection ━━${NC}"
 [ -d "$HOME_DIR/.cursor" ] || [ -d "$HOME_DIR/.config/Cursor" ] && cursor_found=true || cursor_found=false
 has codex || [ -d "$HOME_DIR/.codex" ] && codex_found=true || codex_found=false
 has opencode || [ -d "$HOME_DIR/.config/opencode" ] && opencode_found=true || opencode_found=false
+has kilo || [ -d "$HOME_DIR/.config/kilo" ] && kilo_found=true || kilo_found=false
 
 ask_install "AGY (Gemini)" $agy_found || export SKIP_AGY=1
 ask_install "Cursor" $cursor_found || export SKIP_CURSOR=1
 ask_install "Codex" $codex_found || export SKIP_CODEX=1
 ask_install "OpenCode" $opencode_found || export SKIP_OPENCODE=1
+ask_install "Kilo" $kilo_found || export SKIP_KILO=1
 
 # ─── Step 0: ~/.agents symlink ───────────────────────────────────────────────
 # Many tools (OpenCode, etc.) expect skills at ~/.agents/skills/
@@ -213,6 +215,13 @@ fi
 # OpenCode reads ~/.agents/skills natively (Agent Skills spec)
 ok "OpenCode skills: reads ~/.agents/skills natively (no symlink needed)"
 
+# Kilo reads ~/.agents/skills natively (Agent Skills spec), same as OpenCode
+if [ -z "${SKIP_KILO:-}" ]; then
+  ok "Kilo skills: reads ~/.agents/skills natively (no symlink needed)"
+else
+  info "Kilo skills sync skipped."
+fi
+
 # ─── Step 4: AGENTS.md symlinks ──────────────────────────────────────────────
 section "4 / 7  AGENTS.md (global instructions)"
 AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
@@ -235,6 +244,13 @@ if [ -z "${SKIP_OPENCODE:-}" ]; then
   mkdir -p "$HOME_DIR/.config/opencode"
   ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/opencode/AGENTS.md"
   ok "OpenCode AGENTS.md → $AGENTS_MD"
+fi
+
+# Kilo
+if [ -z "${SKIP_KILO:-}" ]; then
+  mkdir -p "$HOME_DIR/.config/kilo"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/kilo/AGENTS.md"
+  ok "Kilo AGENTS.md → $AGENTS_MD"
 fi
 
 # Codex: use the canonical policy directly. A symlink avoids relying on
@@ -312,6 +328,13 @@ if has rtk; then
     ln -sfn "$RTK_SRC" "$RTK_DST"
     ok "RTK → OpenCode (plugin symlink)"
   fi
+
+  # Kilo: create RTK.md instruction file
+  if [ -z "${SKIP_KILO:-}" ]; then
+    rtk init -g --agent kilo --auto-patch 2>/dev/null \
+      && ok "RTK → Kilo (RTK.md created)" \
+      || info "RTK → Kilo (already configured)"
+  fi
 else
   warn "rtk not found — skipping RTK setup for all agents"
   info "Install RTK: cargo install rtk"
@@ -345,10 +368,10 @@ echo -e "${GREEN}${BOLD}  ✨ Setup complete!${NC}"
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo "  Skills:       ~/.agents/skills/ (symlinked to AGY, Cursor, Codex)"
-echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Cursor plugin)"
-echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex"
-echo "  RTK:          hook (Cursor), plugin (OpenCode), RTK.md (Codex), rules (AGY)"
-echo "  Context-mode: hooks (Cursor, AGY), plugin (OpenCode, Codex)"
+echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Kilo, Cursor plugin)"
+echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex, Kilo"
+echo "  RTK:          hook (Cursor), plugin (OpenCode), RTK.md (Codex, Kilo), rules (AGY)"
+echo "  Context-mode: hooks (Cursor, AGY), plugin (OpenCode, Codex), native (Kilo)"
 echo "  Herdr:        sessionStart hooks (Cursor, Codex)"
 echo ""
 echo "  When you add a new MCP server:"

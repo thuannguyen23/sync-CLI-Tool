@@ -1,6 +1,6 @@
 # ~/.agents — AI Coding CLI Dotfiles
 
-Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to 4 CLI tools: **AGY**, **Codex**, **OpenCode**, and **Cursor**.
+Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to 5 CLI tools: **AGY**, **Codex**, **OpenCode**, **Cursor**, and **Kilo**.
 
 ## Installation (New Machine)
 
@@ -71,6 +71,7 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 | Codex | Symlink canonical policy | `~/.codex/AGENTS.md` → `rules/AGENTS.md` |
 | OpenCode | Symlink canonical policy | `~/.config/opencode/AGENTS.md` → `rules/AGENTS.md` |
 | Cursor | Local plugin | `~/.cursor/plugins/local/sync-cli-tool` → `plugins/cursor/` |
+| Kilo | Symlink canonical policy | `~/.config/kilo/AGENTS.md` → `rules/AGENTS.md` |
 
 ### RTK
 | Tool | Mechanism | File |
@@ -79,6 +80,7 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 | Codex | Prompt rule | `~/.codex/AGENTS.md` → symlink → `rules/AGENTS.md` |
 | OpenCode | Runtime TS plugin | `~/.config/opencode/plugins/rtk.ts` → symlink → `plugins/opencode/rtk.ts` |
 | Cursor | Pre-tool hook | `~/.cursor/hooks.json` (preToolUse Shell → `rtk hook cursor`) |
+| Kilo | Prompt rule / Hook | `~/.config/kilo/RTK.md` / `rtk init` |
 
 ### MCP Format
 | Tool | File | Format |
@@ -87,6 +89,7 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 | OpenCode | `~/.config/opencode/opencode.json` (key `mcp`) | JSON `type:"local"`, `command` array |
 | Cursor | `~/.cursor/mcp.json` | JSON `mcpServers`, simple |
 | Codex | `~/.codex/global-mcp.toml` | TOML `[mcp_servers.<name>]` |
+| Kilo | `~/.config/kilo/kilo.json` (key `mcp`) | JSON `type:"local"`, `command` array |
 
 ### Skills
 | Tool | Location |
@@ -95,3 +98,4 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 | Cursor | `~/.config/Cursor/User/skills/` → symlink |
 | Codex | `~/.codex/skills/<name>` → symlinks |
 | OpenCode | `~/.agents/skills/` (native read) |
+| Kilo | `~/.agents/skills/` (native read) |
