@@ -87,10 +87,10 @@
       "requires": ["npx"],
       "description": "Web search (DuckDuckGo, Bing) without needing an API key"
     },
-    "puppeteer": {
-      "command": ["npx", "-y", "@modelcontextprotocol/server-puppeteer"],
+    "agent-browser": {
+      "command": ["npx", "-y", "agent-browser", "mcp"],
       "requires": ["npx"],
-      "description": "Browser automation, E2E testing, scraping"
+      "description": "Fast, token-efficient browser automation designed for AI agents"
     }
   }
 }
