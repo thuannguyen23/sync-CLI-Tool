@@ -8,6 +8,7 @@ test('setup installs the canonical global policy for all four CLI agents', () =>
   const setup = read('setup.sh')
 
   assert.match(setup, /\.gemini\/config\/AGENTS\.md/)
+  assert.match(setup, /\.gemini\/config\/rules\/antigravity-code-review\.md/)
   assert.match(setup, /\.codex\/AGENTS\.md/)
   assert.match(
     setup,

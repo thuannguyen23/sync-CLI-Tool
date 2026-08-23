@@ -225,18 +225,27 @@ fi
 # ─── Step 4: AGENTS.md symlinks ──────────────────────────────────────────────
 section "4 / 7  AGENTS.md (global instructions)"
 AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
+AGY_REVIEW_MD="$AGENTS_DIR/rules/antigravity-code-review.md"
 
 # AGY
 if [ -z "${SKIP_AGY:-}" ]; then
   mkdir -p "$HOME_DIR/.gemini/config"
+  mkdir -p "$HOME_DIR/.gemini/config/rules"
   mkdir -p "$HOME_DIR/.gemini/antigravity-cli"
+  mkdir -p "$HOME_DIR/.gemini/antigravity-cli/rules"
   mkdir -p "$HOME_DIR/.gemini/antigravity-ide"
+  mkdir -p "$HOME_DIR/.gemini/antigravity-ide/rules"
   
   ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/config/AGENTS.md"
   ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
   ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
+
+  ln -sfn "$AGY_REVIEW_MD" "$HOME_DIR/.gemini/config/rules/antigravity-code-review.md"
+  ln -sfn "$AGY_REVIEW_MD" "$HOME_DIR/.gemini/antigravity-cli/rules/antigravity-code-review.md"
+  ln -sfn "$AGY_REVIEW_MD" "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.md"
   
   ok "AGY AGENTS.md → $AGENTS_MD (Global, CLI, IDE)"
+  ok "AGY Code Review Rule → $AGY_REVIEW_MD"
 fi
 
 # OpenCode
