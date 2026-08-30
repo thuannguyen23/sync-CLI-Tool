@@ -156,16 +156,16 @@ if [ -z "${SKIP_AGY:-}" ]; then
   mkdir -p "$HOME_DIR/.gemini/antigravity-ide/skills"
   for skill_dir in "$SKILLS_SRC"/*/; do
     skill_name="$(basename "$skill_dir")"
-    
+
     target_global="$HOME_DIR/.gemini/config/skills/$skill_name"
     if [ ! -e "$target_global" ]; then ln -sfn "$skill_dir" "$target_global"; fi
-    
+
     target_cli="$HOME_DIR/.gemini/antigravity-cli/skills/$skill_name"
     if [ ! -e "$target_cli" ]; then ln -sfn "$skill_dir" "$target_cli"; fi
-    
+
     target_ide="$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name"
     if [ ! -e "$target_ide" ]; then ln -sfn "$skill_dir" "$target_ide"; fi
-    
+
     ok "AGY skill linked (Global, CLI, IDE): $skill_name"
   done
   find "$HOME_DIR/.gemini/config/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
@@ -230,22 +230,36 @@ AGY_REVIEW_MD="$AGENTS_DIR/rules/antigravity-code-review.md"
 # AGY
 if [ -z "${SKIP_AGY:-}" ]; then
   mkdir -p "$HOME_DIR/.gemini/config"
-  mkdir -p "$HOME_DIR/.gemini/config/rules"
   mkdir -p "$HOME_DIR/.gemini/antigravity-cli"
-  mkdir -p "$HOME_DIR/.gemini/antigravity-cli/rules"
   mkdir -p "$HOME_DIR/.gemini/antigravity-ide"
-  mkdir -p "$HOME_DIR/.gemini/antigravity-ide/rules"
-  
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/config/AGENTS.md"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
+  mkdir -p "$HOME_DIR/.gemini/antigravity"
 
-  ln -sfn "$AGY_REVIEW_MD" "$HOME_DIR/.gemini/config/rules/antigravity-code-review.md"
-  ln -sfn "$AGY_REVIEW_MD" "$HOME_DIR/.gemini/antigravity-cli/rules/antigravity-code-review.md"
-  ln -sfn "$AGY_REVIEW_MD" "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.md"
-  
-  ok "AGY AGENTS.md → $AGENTS_MD (Global, CLI, IDE)"
-  ok "AGY Code Review Rule → $AGY_REVIEW_MD"
+  # Assemble AGY-specific global rules (Shared AGENTS.md + Safety & Code Review + RTK)
+  AGY_COMBINED="$HOME_DIR/.gemini/config/AGENTS.md"
+  rm -f "$AGY_COMBINED"
+  {
+    cat "$AGENTS_MD"
+    echo -e "\n\n"
+    # Append code review policy (strip YAML frontmatter if present)
+    if [ -f "$AGY_REVIEW_MD" ]; then
+      sed '/^---$/,/^---$/d' "$AGY_REVIEW_MD"
+    fi
+    if [ -f "$AGENTS_DIR/rules/antigravity-rtk-rules.md" ]; then
+      echo -e "\n\n"
+      cat "$AGENTS_DIR/rules/antigravity-rtk-rules.md"
+    fi
+  } > "$AGY_COMBINED"
+
+  ln -sfn "$AGY_COMBINED" "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
+  ln -sfn "$AGY_COMBINED" "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
+  ln -sfn "$AGY_COMBINED" "$HOME_DIR/.gemini/antigravity/AGENTS.md"
+
+  # Clean up any legacy standalone symlinks in rules/ subdirectories
+  rm -f "$HOME_DIR/.gemini/config/rules/antigravity-code-review.md" 2>/dev/null || true
+  rm -f "$HOME_DIR/.gemini/antigravity-cli/rules/antigravity-code-review.md" 2>/dev/null || true
+  rm -f "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.md" 2>/dev/null || true
+
+  ok "AGY AGENTS.md compiled with Code Review & RTK rules (Global, CLI, IDE, App 2.0)"
 fi
 
 # OpenCode

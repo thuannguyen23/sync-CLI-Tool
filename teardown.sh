@@ -89,11 +89,13 @@ fi
 # 2. Global Rules (AGENTS.md)
 section "2 / 5  Global Rules"
 remove_symlink "$HOME_DIR/.gemini/config/AGENTS.md"
+[ -f "$HOME_DIR/.gemini/config/AGENTS.md" ] && rm -f "$HOME_DIR/.gemini/config/AGENTS.md" && ok "Removed AGY compiled AGENTS.md"
 remove_symlink "$HOME_DIR/.gemini/config/rules/antigravity-code-review.md"
 remove_symlink "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
 remove_symlink "$HOME_DIR/.gemini/antigravity-cli/rules/antigravity-code-review.md"
 remove_symlink "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
 remove_symlink "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.md"
+remove_symlink "$HOME_DIR/.gemini/antigravity/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/opencode/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/kilo/AGENTS.md"
 remove_symlink "$HOME_DIR/.codex/AGENTS.md"
@@ -117,7 +119,7 @@ if [ -d "$AGENTS_DIR/skills" ]; then
     # Skip if not a directory
     [ -d "$skill_dir" ] || continue
     skill_name="$(basename "$skill_dir")"
-    
+
     # Remove from AGY (Global, CLI, IDE)
     if [ -L "$HOME_DIR/.gemini/config/skills/$skill_name" ]; then
        rm "$HOME_DIR/.gemini/config/skills/$skill_name"
@@ -129,7 +131,7 @@ if [ -d "$AGENTS_DIR/skills" ]; then
     if [ -L "$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name" ]; then
        rm "$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name"
     fi
-    
+
     # Remove from Codex
     if [ -L "$HOME_DIR/.codex/skills/$skill_name" ]; then
        rm "$HOME_DIR/.codex/skills/$skill_name"
