@@ -1,8 +1,3 @@
----
-name: antigravity-code-review
-description: Strict safety guidelines, mandatory code preview before editing, and absolute git protection for Antigravity.
----
-
 # Antigravity Safety & Mandatory Code Preview Policy
 
 > [!CRITICAL]
@@ -34,49 +29,49 @@ Whenever the user asks to add, edit, refactor, or delete code:
 3. **HALT & Ask for Approval**: Ask clearly: _"Bạn có duyệt thay đổi này để tôi tiến hành áp dụng không?"_ (or _"Do you approve these changes to proceed?"_).
 4. **Tool Execution Permission**: You may ONLY invoke file-modifying tools in the subsequent turn AFTER the user explicitly responds with confirmation (e.g., "approved", "ok", "duyệt", "proceed", "áp dụng", "tiến hành").
 
-## 3. Pattern Discovery Before Implementation
+## 3. Test-Driven Development (TDD) Discipline
+
+- **Iron Law**: NO production code without a test first.
+- When creating new features or fixing bugs:
+  1. Define or update the test case first (RED).
+  2. In your Code Preview, present BOTH the test file and the implementation file.
+  3. After receiving user approval, execute tests to verify failure (RED), apply minimal code, and verify pass (GREEN).
+
+## 4. Systematic Debugging Discipline
+
+- When encountering any bug or test failure, NEVER guess or apply quick symptom patches.
+- Investigate and establish the confirmed root cause first.
+- Reproduce the issue with a minimal failing test before proposing the fix.
+
+## 5. Pattern Discovery & Single Responsibility
 
 - **BEFORE writing any code**, search the codebase for existing files or classes that implement similar functionality (use `rg`, Codegraph, or IDE references).
-- Infer the **Single Responsibility** of each file from its:
-  - File name and naming convention of the codebase (e.g. `*sql`, `*repo`, `*service`, `*handler`, `*controller`...)
-  - Directory location (e.g. `repositories/`, `services/`, `utils/`)
-  - Existing methods and logic already present in the file
-- Never add logic that does not belong to a file's inferred responsibility. For example: if a file only contains DB queries, do not add business logic into it.
-- Follow existing patterns — **do NOT invent a new pattern** when a similar one already exists in the codebase.
-- If the proposed code would **break an existing pattern or mix responsibilities**, explicitly warn the user and stop before proceeding.
+- Infer the **Single Responsibility** of each file from its naming convention, directory location, and existing logic.
+- Never add logic that does not belong to a file's inferred responsibility (e.g., DB queries stay in repositories, business logic in services).
+- Follow existing patterns — do NOT invent a new pattern when a similar one already exists.
 
-## 4. No Scope Creep
+## 6. No Scope Creep
 
 - Only implement what the user explicitly requested.
 - If you discover additional issues, bugs, or improvement opportunities outside the requested scope, **report them separately** — do NOT fix them silently.
 - Ask for permission before refactoring, renaming, or restructuring anything that was not part of the original request.
 
-## 5. Dependency Approval Gate
+## 7. Dependency Approval Gate
 
 - **NEVER** add, remove, or upgrade packages/libraries without explicit user approval.
-- Before proposing a new dependency, present:
-  - Why the dependency is needed
-  - Alternatives considered (including solving it without a new dependency)
-  - Impact on bundle size, compatibility, and maintenance
-- Wait for the user's approval before running `npm install`, `pip install`, `cargo add`, or any equivalent command.
+- Before proposing a new dependency, explain why it is needed, alternatives considered, and impact on bundle size/maintenance.
 
-## 6. Deletion Protection
+## 8. Deletion Protection
 
 - **NEVER** delete files, functions, classes, or significant blocks of code without explicit user approval.
-- Before proposing a deletion, explain what will be removed and confirm there are no remaining consumers (use Codegraph or `rg` to verify).
+- Before proposing a deletion, explain what will be removed and confirm there are no remaining consumers (use Codegraph or `rg`).
 
-## 7. Clarify Before Acting
+## 9. Clarify Before Acting
 
 - When the user's request is ambiguous, underspecified, or has multiple valid interpretations, **ask clarifying questions BEFORE starting implementation**.
-- Do NOT guess the user's intent and silently pick an approach.
 - When multiple implementation approaches exist, present them with trade-offs and let the user choose.
 
-## 8. Disclose Trade-offs
-
-- When there are multiple valid solutions, present the pros and cons of each approach before proceeding.
-- Do NOT silently choose the "simplest" or "fastest" approach without informing the user of alternatives.
-
-## 9. No Silent Workarounds
+## 10. No Silent Workarounds
 
 - **NEVER** use workarounds, hacks, or temporary fixes without explicitly disclosing them to the user.
-- If a proper solution is too complex or blocked, explain the situation and propose the workaround transparently — let the user decide.
+- If a proper solution is blocked, explain the situation and propose the workaround transparently — let the user decide.

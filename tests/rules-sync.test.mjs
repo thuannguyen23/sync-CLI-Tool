@@ -9,12 +9,9 @@ test("setup installs the canonical global policy for all four CLI agents", () =>
   const setup = read("setup.sh");
 
   assert.match(setup, /\.gemini\/config\/AGENTS\.md/);
-  assert.match(setup, /AGY_REVIEW_MD/);
+  assert.match(setup, /AGY_SAFETY_MD/);
   assert.match(setup, /\.codex\/AGENTS\.md/);
-  assert.match(
-    setup,
-    /ln -sfn "\$AGENTS_MD" "\$HOME_DIR\/\.codex\/AGENTS\.md"/,
-  );
+  assert.match(setup, /CODEX_PLANNING_MD/);
   assert.match(setup, /\.config\/opencode\/AGENTS\.md/);
   assert.match(setup, /\.cursor\/plugins\/local\/sync-cli-tool/);
 });

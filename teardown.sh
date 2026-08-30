@@ -99,6 +99,7 @@ remove_symlink "$HOME_DIR/.gemini/antigravity/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/opencode/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/kilo/AGENTS.md"
 remove_symlink "$HOME_DIR/.codex/AGENTS.md"
+[ -f "$HOME_DIR/.codex/AGENTS.md" ] && rm -f "$HOME_DIR/.codex/AGENTS.md" && ok "Removed Codex compiled AGENTS.md"
 remove_symlink "$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
 if [ -e "$HOME_DIR/.cursor/plugins/local/sync-cli-tool.bak" ]; then
   mv "$HOME_DIR/.cursor/plugins/local/sync-cli-tool.bak" "$HOME_DIR/.cursor/plugins/local/sync-cli-tool"

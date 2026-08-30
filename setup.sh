@@ -225,7 +225,6 @@ fi
 # ─── Step 4: AGENTS.md symlinks ──────────────────────────────────────────────
 section "4 / 7  AGENTS.md (global instructions)"
 AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
-AGY_REVIEW_MD="$AGENTS_DIR/rules/antigravity-code-review.md"
 
 # AGY
 if [ -z "${SKIP_AGY:-}" ]; then
@@ -234,19 +233,29 @@ if [ -z "${SKIP_AGY:-}" ]; then
   mkdir -p "$HOME_DIR/.gemini/antigravity-ide"
   mkdir -p "$HOME_DIR/.gemini/antigravity"
 
-  # Assemble AGY-specific global rules (Shared AGENTS.md + Safety & Code Review + RTK)
+  AGY_SAFETY_MD="$AGENTS_DIR/rules/antigravity/code-review-safety.md"
+  CODEGRAPH_MD="$AGENTS_DIR/rules/shared/codegraph-impact.md"
+  VERIFY_MD="$AGENTS_DIR/rules/shared/verification-gate.md"
+  RTK_MD="$AGENTS_DIR/rules/shared/rtk.md"
+
+  # Assemble AGY-specific global rules (Top-1 Safety/Code Preview + Codegraph Impact + Verification + RTK)
   AGY_COMBINED="$HOME_DIR/.gemini/config/AGENTS.md"
   rm -f "$AGY_COMBINED"
   {
-    cat "$AGENTS_MD"
-    echo -e "\n\n"
-    # Append code review policy (strip YAML frontmatter if present)
-    if [ -f "$AGY_REVIEW_MD" ]; then
-      awk 'NR==1 && /^---$/{in_fm=1; next} in_fm && /^---$/{in_fm=0; next} !in_fm{print}' "$AGY_REVIEW_MD"
-    fi
-    if [ -f "$AGENTS_DIR/rules/antigravity-rtk-rules.md" ]; then
+    if [ -f "$AGY_SAFETY_MD" ]; then
+      awk 'NR==1 && /^---$/{in_fm=1; next} in_fm && /^---$/{in_fm=0; next} !in_fm{print}' "$AGY_SAFETY_MD"
       echo -e "\n\n"
-      cat "$AGENTS_DIR/rules/antigravity-rtk-rules.md"
+    fi
+    if [ -f "$CODEGRAPH_MD" ]; then
+      cat "$CODEGRAPH_MD"
+      echo -e "\n\n"
+    fi
+    if [ -f "$VERIFY_MD" ]; then
+      cat "$VERIFY_MD"
+      echo -e "\n\n"
+    fi
+    if [ -f "$RTK_MD" ]; then
+      cat "$RTK_MD"
     fi
   } > "$AGY_COMBINED"
 
@@ -259,7 +268,7 @@ if [ -z "${SKIP_AGY:-}" ]; then
   rm -f "$HOME_DIR/.gemini/antigravity-cli/rules/antigravity-code-review.md" 2>/dev/null || true
   rm -f "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.md" 2>/dev/null || true
 
-  ok "AGY AGENTS.md compiled with Code Review & RTK rules (Global, CLI, IDE, App 2.0)"
+  ok "AGY AGENTS.md compiled (Safety & Preview, Codegraph, Verification, RTK)"
 fi
 
 # OpenCode
@@ -276,12 +285,34 @@ if [ -z "${SKIP_KILO:-}" ]; then
   ok "Kilo AGENTS.md → $AGENTS_MD"
 fi
 
-# Codex: use the canonical policy directly. A symlink avoids relying on
-# undocumented include expansion inside the global AGENTS.md file.
+# Codex: compiles planning & review + Codegraph impact + verification + RTK
 if [ -z "${SKIP_CODEX:-}" ]; then
   mkdir -p "$HOME_DIR/.codex"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
-  ok "Codex AGENTS.md → $AGENTS_MD"
+  CODEX_PLANNING_MD="$AGENTS_DIR/rules/codex/planning-and-review.md"
+  CODEGRAPH_MD="$AGENTS_DIR/rules/shared/codegraph-impact.md"
+  VERIFY_MD="$AGENTS_DIR/rules/shared/verification-gate.md"
+  RTK_MD="$AGENTS_DIR/rules/shared/rtk.md"
+
+  CODEX_COMBINED="$HOME_DIR/.codex/AGENTS.md"
+  rm -f "$CODEX_COMBINED"
+  {
+    if [ -f "$CODEX_PLANNING_MD" ]; then
+      cat "$CODEX_PLANNING_MD"
+      echo -e "\n\n"
+    fi
+    if [ -f "$CODEGRAPH_MD" ]; then
+      cat "$CODEGRAPH_MD"
+      echo -e "\n\n"
+    fi
+    if [ -f "$VERIFY_MD" ]; then
+      cat "$VERIFY_MD"
+      echo -e "\n\n"
+    fi
+    if [ -f "$RTK_MD" ]; then
+      cat "$RTK_MD"
+    fi
+  } > "$CODEX_COMBINED"
+  ok "Codex AGENTS.md compiled (Planning, Review Audit, Codegraph, Verification, RTK)"
 fi
 
 # Cursor: file-backed global rules are distributed as a local plugin.
@@ -290,6 +321,15 @@ if [ -z "${SKIP_CURSOR:-}" ]; then
   CURSOR_PLUGIN_SRC="$AGENTS_DIR/plugins/cursor"
   CURSOR_PLUGIN_DST="$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
   mkdir -p "$HOME_DIR/.cursor/plugins/local"
+
+  # Sync cursor workflow rule directly from AGENTS_MD with frontmatter
+  {
+    echo "---"
+    echo "alwaysApply: true"
+    echo "---"
+    echo ""
+    cat "$AGENTS_MD"
+  } > "$CURSOR_PLUGIN_SRC/rules/agent-workflow.mdc"
 
   if [ -L "$CURSOR_PLUGIN_DST" ]; then
     ln -sfn "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
@@ -313,9 +353,10 @@ fi
 # ─── Step 5: RTK (Rust Token Killer) ─────────────────────────────────────────
 # Each agent gets RTK through its native mechanism:
 #   Cursor  → hook (rtk init merges into hooks.json, preserves existing hooks)
-#   Codex   → RTK.md instruction file (no hook — Codex can't modify tool args)
-#   AGY     → rules .md file (no hook — AGY has bounded hook support only)
+#   Codex   → prompt rule compiled in AGENTS.md
+#   AGY     → prompt rule compiled in AGENTS.md
 #   OpenCode → TypeScript plugin (symlinked from repo for version control)
+#   Kilo    → prompt rule in AGENTS.md
 section "5 / 7  RTK (Rust Token Killer)"
 if has rtk; then
   # Cursor: merge RTK hook into hooks.json (hook-only = no RTK.md clutter)
@@ -325,21 +366,15 @@ if has rtk; then
       || info "RTK → Cursor (already configured)"
   fi
 
-  # Codex: create RTK.md instruction file
+  # Codex: RTK is already compiled into AGENTS.md (clean up any duplicate RTK.md)
   if [ -z "${SKIP_CODEX:-}" ]; then
-    rtk init -g --codex --auto-patch 2>/dev/null \
-      && ok "RTK → Codex (RTK.md created)" \
-      || info "RTK → Codex (already configured)"
-    # Re-symlink AGENTS.md — rtk init --codex may have overwritten our symlink
-    AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
-    ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
+    rm -f "$HOME_DIR/.codex/RTK.md" 2>/dev/null || true
+    ok "RTK → Codex (integrated in AGENTS.md)"
   fi
 
-  # AGY: create rules markdown file (project-scoped, run from repo dir)
+  # AGY: RTK is already compiled into AGENTS.md
   if [ -z "${SKIP_AGY:-}" ]; then
-    (cd "$AGENTS_DIR" && rtk init --agent antigravity --auto-patch 2>/dev/null) \
-      && ok "RTK → AGY (rules file created)" \
-      || info "RTK → AGY (already configured)"
+    ok "RTK → AGY (integrated in AGENTS.md)"
   fi
 
   # OpenCode: symlink rtk.ts plugin from repo (NOT rtk init, to preserve
@@ -352,11 +387,10 @@ if has rtk; then
     ok "RTK → OpenCode (plugin symlink)"
   fi
 
-  # Kilo: create RTK.md instruction file
+  # Kilo: RTK is already in AGENTS.md (clean up any duplicate RTK.md)
   if [ -z "${SKIP_KILO:-}" ]; then
-    rtk init -g --agent kilo --auto-patch 2>/dev/null \
-      && ok "RTK → Kilo (RTK.md created)" \
-      || info "RTK → Kilo (already configured)"
+    rm -f "$HOME_DIR/.config/kilo/RTK.md" 2>/dev/null || true
+    ok "RTK → Kilo (integrated in AGENTS.md)"
   fi
 else
   warn "rtk not found — skipping RTK setup for all agents"
