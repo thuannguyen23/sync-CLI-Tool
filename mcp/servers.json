@@ -9,7 +9,11 @@
       "description": "Library docs lookup via Context7"
     },
     "sequential-thinking": {
-      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
       "requires": ["npx"],
       "description": "Sequential reasoning / chain-of-thought"
     },
@@ -88,7 +92,7 @@
       "description": "Web search (DuckDuckGo, Bing) without needing an API key"
     },
     "agent-browser": {
-      "command": ["npx", "-y", "agent-browser", "mcp"],
+      "command": ["npx", "-y", "@nxavis/agent-browser-mcp"],
       "requires": ["npx"],
       "description": "Fast, token-efficient browser automation designed for AI agents"
     }
