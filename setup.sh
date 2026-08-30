@@ -242,7 +242,7 @@ if [ -z "${SKIP_AGY:-}" ]; then
     echo -e "\n\n"
     # Append code review policy (strip YAML frontmatter if present)
     if [ -f "$AGY_REVIEW_MD" ]; then
-      sed '/^---$/,/^---$/d' "$AGY_REVIEW_MD"
+      awk 'NR==1 && /^---$/{in_fm=1; next} in_fm && /^---$/{in_fm=0; next} !in_fm{print}' "$AGY_REVIEW_MD"
     fi
     if [ -f "$AGENTS_DIR/rules/antigravity-rtk-rules.md" ]; then
       echo -e "\n\n"
