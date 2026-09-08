@@ -19,8 +19,8 @@ test('sync-mcp handles remote HTTP/SSE servers for Cursor and OpenCode', () => {
   assert.match(source, /type:\s*'remote'/)
 })
 
-test('sync-mcp syncs remote HTTP/SSE servers to Codex using --url flag', () => {
+test('sync-mcp syncs remote HTTP/SSE servers to Codex using --url flag and http_headers', () => {
   assert.match(source, /syncCodex/)
   assert.match(source, /'--url'/)
-  assert.match(source, /'--bearer-token-env-var'/)
+  assert.match(source, /http_headers/)
 })

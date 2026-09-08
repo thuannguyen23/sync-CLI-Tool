@@ -265,9 +265,8 @@ async function syncCodex() {
   try {
     const listOut = run(['mcp', 'list'])
     existingNames = listOut.split('\n')
-      .slice(1) // skip header
-      .map(l => l.split(/\s+/)[0])
-      .filter(n => n && n !== 'context-mode') // never remove context-mode plugin
+      .map(l => l.trim().split(/\s+/)[0])
+      .filter(n => n && n !== 'Name' && n !== 'context-mode') // never remove context-mode plugin or table header
   } catch { /* ignore */ }
 
   // Remove all existing managed servers so we can fully sync from servers.json
@@ -279,16 +278,11 @@ async function syncCodex() {
   // Add each server fresh
   for (const [name, server] of Object.entries(servers)) {
     if (server.url) {
-      const cliArgs = ['mcp', 'add', name, '--url', interpolate(server.url)]
-      if (server.headers && server.headers.Authorization) {
-        const match = server.headers.Authorization.match(/\$\{([^}]+)\}/)
-        if (match) {
-          cliArgs.push('--bearer-token-env-var', match[1])
-        }
-      }
+      const resolvedUrl = interpolate(server.url)
+      const cliArgs = ['mcp', 'add', name, '--url', resolvedUrl]
       try {
         run(cliArgs)
-        ok(`Codex    (mcp add ${name} → ${server.url})`)
+        ok(`Codex    (mcp add ${name} → ${resolvedUrl})`)
       } catch (e) {
         err(`Codex add ${name}: ${e.message.slice(0, 80)}`)
       }
@@ -310,6 +304,49 @@ async function syncCodex() {
       ok(`Codex    (mcp add ${name} → ${resolvedCmd})`)
     } catch (e) {
       err(`Codex add ${name}: ${e.message.slice(0, 80)}`)
+    }
+  }
+
+  // Inject http_headers for remote servers into ~/.codex/config.toml
+  const codexConfigFile = join(HOME, '.codex/config.toml')
+  if (existsSync(codexConfigFile)) {
+    let tomlContent = readFileSync(codexConfigFile, 'utf8')
+    let modified = false
+
+    for (const [name, server] of Object.entries(servers)) {
+      if (!server.url || !server.headers || Object.keys(server.headers).length === 0) continue
+
+      const headerEntries = Object.entries(server.headers)
+        .map(([k, v]) => `${JSON.stringify(k)} = ${JSON.stringify(interpolate(v))}`)
+        .join(', ')
+
+      const sectionHeader = `[mcp_servers.${name}]`
+      const sectionIdx = tomlContent.indexOf(sectionHeader)
+      if (sectionIdx === -1) continue
+
+      const nextSectionIdx = tomlContent.indexOf('\n[', sectionIdx + sectionHeader.length)
+      const sectionEnd = nextSectionIdx === -1 ? tomlContent.length : nextSectionIdx
+
+      let sectionBody = tomlContent.slice(sectionIdx, sectionEnd)
+      sectionBody = sectionBody
+        .split('\n')
+        .filter(l => !l.trim().startsWith('bearer_token_env_var') && !l.trim().startsWith('http_headers'))
+        .join('\n')
+
+      const insertLine = `http_headers = { ${headerEntries} }`
+      sectionBody = sectionBody.replace(
+        new RegExp(`(\\[mcp_servers\\.${name}\\][\\s\\S]*?url\\s*=\\s*"[^"]*")`),
+        `$1\n${insertLine}`
+      )
+
+      tomlContent = tomlContent.slice(0, sectionIdx) + sectionBody + tomlContent.slice(sectionEnd)
+      modified = true
+    }
+
+    if (modified) {
+      backupIfNeeded(codexConfigFile)
+      writeFileSync(codexConfigFile, tomlContent, 'utf8')
+      ok(`Codex    (injected http_headers into config.toml)`)
     }
   }
 }
