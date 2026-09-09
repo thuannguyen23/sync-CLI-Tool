@@ -674,7 +674,7 @@
       "skillPath": "skills/orca-cli/SKILL.md",
       "skillFolderHash": "0c90a5b8b422a93ca806af6df3b65445ab5b2072",
       "installedAt": "2026-09-08T01:39:48.656Z",
-      "updatedAt": "2026-09-08T01:39:48.656Z"
+      "updatedAt": "2026-09-09T02:42:22.081Z"
     },
     "orchestration": {
       "source": "stablyai/orca",
@@ -700,14 +700,13 @@
   },
   "lastSelectedAgents": [
     "amp",
-    "antigravity",
-    "antigravity-cli",
     "cline",
     "codex",
     "cursor",
-    "deepagents",
+    "droid",
     "gemini-cli",
     "github-copilot",
+    "kilo",
     "kimi-code-cli",
     "opencode",
     "warp",
