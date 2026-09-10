@@ -244,7 +244,14 @@ function buildOpenCode() {
     }
   }
 
-  return { ...existing, plugin: plugins, mcp, permission }
+  // Ensure global AGENTS.md is registered in instructions array
+  const agentsMdPath = join(HOME, '.config/opencode/AGENTS.md')
+  let instructions = existing.instructions ?? []
+  if (!instructions.includes(agentsMdPath)) {
+    instructions = [agentsMdPath, ...instructions]
+  }
+
+  return { ...existing, instructions, plugin: plugins, mcp, permission }
 }
 
 // ─── 4. Codex — use `codex mcp add` (writes correctly to config.toml) ────────

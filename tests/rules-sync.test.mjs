@@ -5,14 +5,13 @@ import { test } from "node:test";
 const read = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("setup installs the canonical global policy for all four CLI agents", () => {
+test("setup installs the canonical global policy for all CLI agents", () => {
   const setup = read("setup.sh");
 
   assert.match(setup, /\.gemini\/config\/AGENTS\.md/);
-  assert.match(setup, /AGY_SAFETY_MD/);
   assert.match(setup, /\.codex\/AGENTS\.md/);
-  assert.match(setup, /CODEX_PLANNING_MD/);
   assert.match(setup, /\.config\/opencode\/AGENTS\.md/);
+  assert.match(setup, /\.config\/kilo\/AGENTS\.md/);
   assert.match(setup, /\.cursor\/plugins\/local\/sync-cli-tool/);
 });
 
@@ -34,10 +33,13 @@ test("Cursor adapter is an always-applied rule in a local plugin", () => {
 test("canonical policy contains the workflow safety gates", () => {
   const policy = read("rules/AGENTS.md");
 
+  assert.match(policy, /SureForge Quality Discipline/);
   assert.match(policy, /Workflow State Gate/);
   assert.match(policy, /When a Valid Plan Exists/);
   assert.match(policy, /Codegraph Impact Gate/);
   assert.match(policy, /The required first-choice tool is `Codegraph`/);
   assert.match(policy, /Verification Gate/);
   assert.match(policy, /Do not repeat a completed lifecycle phase/);
+  assert.match(policy, /Mandatory Code Preview & Approval Gate/);
+  assert.match(policy, /Absolute Git Prohibition/);
 });
