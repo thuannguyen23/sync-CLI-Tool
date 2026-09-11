@@ -1,7 +1,7 @@
 {
   "servers": {
     "context7": {
-      "command": ["npx", "@upstash/context7-mcp@1.0.31"],
+      "command": ["npx", "-y", "@upstash/context7-mcp@1.0.31"],
       "env": {
         "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
       },
@@ -19,6 +19,9 @@
     },
     "codegraph": {
       "command": ["codegraph", "serve", "--mcp"],
+      "env": {
+        "CODEGRAPH_NO_DAEMON": "1"
+      },
       "requires": ["codegraph"],
       "description": "Code intelligence and knowledge graph"
     },
