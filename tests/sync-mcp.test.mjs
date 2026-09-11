@@ -16,11 +16,11 @@ test('sync-mcp handles remote HTTP/SSE servers with url and headers for AGY', ()
 test('sync-mcp handles remote HTTP/SSE servers for Cursor and OpenCode', () => {
   assert.match(source, /buildCursor/)
   assert.match(source, /buildOpenCode/)
-  assert.match(source, /type:\s*'remote'/)
+  assert.match(source, /type:\s*['"]remote['"]/)
 })
 
 test('sync-mcp syncs remote HTTP/SSE servers to Codex using --url flag and http_headers', () => {
   assert.match(source, /syncCodex/)
-  assert.match(source, /'--url'/)
+  assert.match(source, /['"]--url['"]/)
   assert.match(source, /http_headers/)
 })
