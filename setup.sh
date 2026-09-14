@@ -154,6 +154,7 @@ if [ -z "${SKIP_AGY:-}" ]; then
   mkdir -p "$HOME_DIR/.gemini/config/skills"
   mkdir -p "$HOME_DIR/.gemini/antigravity-cli/skills"
   mkdir -p "$HOME_DIR/.gemini/antigravity-ide/skills"
+  mkdir -p "$HOME_DIR/.gemini/antigravity/skills"
   for skill_dir in "$SKILLS_SRC"/*/; do
     skill_name="$(basename "$skill_dir")"
 
@@ -166,11 +167,15 @@ if [ -z "${SKIP_AGY:-}" ]; then
     target_ide="$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name"
     if [ ! -e "$target_ide" ]; then ln -sfn "$skill_dir" "$target_ide"; fi
 
-    ok "AGY skill linked (Global, CLI, IDE): $skill_name"
+    target_agy2="$HOME_DIR/.gemini/antigravity/skills/$skill_name"
+    if [ ! -e "$target_agy2" ]; then ln -sfn "$skill_dir" "$target_agy2"; fi
+
+    ok "AGY skill linked (Global, CLI, IDE, 2.0): $skill_name"
   done
   find "$HOME_DIR/.gemini/config/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
   find "$HOME_DIR/.gemini/antigravity-cli/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
   find "$HOME_DIR/.gemini/antigravity-ide/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  find "$HOME_DIR/.gemini/antigravity/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 else
   info "AGY skills sync skipped."
 fi
