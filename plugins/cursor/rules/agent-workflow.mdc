@@ -24,10 +24,10 @@ Do not expect the user to memorize lifecycle phases or formal state names. Autom
 
 | User Instruction / Natural Prompt | Functional Role | Operational Protocol |
 | :--- | :--- | :--- |
-| *"Lên kế hoạch / plan cho X"*, *"Tôi muốn làm X"* | **Architect (Planner)** | Research context ➔ clarify uncertainties ➔ generate TDD implementation plan. |
-| *"Bắt đầu code đi"*, *"Làm Task N"*, *"Tiến hành"* | **Implementer (Builder)** | Follow approved plan ➔ TDD (RED ➔ GREEN) ➔ **Mandatory Code Preview**. |
-| *"Kiểm tra lại code"*, *"Audit xem có lỗi không"*, *"Review"* | **Auditor (Reviewer)** | Independent inspection ➔ verify test evidence ➔ classify findings. |
-| *"Fix lỗi này: [mô tả]"*, *"Có bug..."* | **Debugger** | Use `systematic-debugging` ➔ establish confirmed root cause before fix. |
+| *"Plan for X"*, *"I want to build X"*, *"Design architecture"* | **Architect (Planner)** | Research context ➔ clarify uncertainties ➔ generate TDD implementation plan. |
+| *"Start coding"*, *"Execute Task N"*, *"Proceed"*, *"Implement X"* | **Implementer (Builder)** | Follow approved plan ➔ TDD (RED ➔ GREEN) ➔ **Mandatory Code Preview**. |
+| *"Review code"*, *"Audit for bugs"*, *"Check test evidence"* | **Auditor (Reviewer)** | Independent inspection ➔ verify test evidence ➔ classify findings. |
+| *"Fix this error: [desc]"*, *"There is a bug..."* | **Debugger** | Use `systematic-debugging` ➔ establish confirmed root cause before fix. |
 
 ---
 
@@ -51,7 +51,7 @@ Do not expect the user to memorize lifecycle phases or formal state names. Autom
    > [!CRITICAL]
    > - You are **STRICTLY FORBIDDEN** from modifying files (`write_to_file`, `replace_file_content`, file-modifying shell commands) in your initial response.
    > - You MUST present a complete and detailed **Code Preview** (diff or snippet) with full target paths.
-   > - You MUST halt generation and ask: _"Bạn có duyệt thay đổi này để tôi tiến hành áp dụng không?"_.
+   > - You MUST halt generation and ask: _"Do you approve these changes for me to apply them?"_ (or localized equivalent in the user's conversation language).
    > - You may ONLY apply edits in the subsequent turn after explicit user confirmation.
 2. **Test-Driven Development (TDD) Discipline**:
    - **Iron Law**: NO production code without a test first.

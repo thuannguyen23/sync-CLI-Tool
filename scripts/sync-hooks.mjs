@@ -373,6 +373,76 @@ function syncKilo() {
   ok(`Kilo     hooks up to date (managed natively)`)
 }
 
+// ─── 6. Claude Code CLI ─────────────────────────────────────────────────────
+
+function syncClaude() {
+  const claudeDir = join(HOME, '.claude')
+  const settingsPath = join(claudeDir, 'settings.json')
+  let settings = readJSON(settingsPath) || {}
+  let changed = false
+
+  if (!settings.hooks) settings.hooks = {}
+
+  // 1. Ensure RTK hook in PreToolUse for Bash
+  if (hasCmd('rtk')) {
+    if (!Array.isArray(settings.hooks.PreToolUse)) settings.hooks.PreToolUse = []
+    const hasRtk = settings.hooks.PreToolUse.some(entry =>
+      entry.hooks?.some(h => typeof h.command === 'string' && h.command.includes('rtk hook claude'))
+    )
+    if (!hasRtk) {
+      settings.hooks.PreToolUse.push({
+        matcher: 'Bash',
+        hooks: [
+          {
+            type: 'command',
+            command: 'rtk hook claude',
+          },
+        ],
+      })
+      changed = true
+    }
+  }
+
+  // 2. Ensure herdr hook in SessionStart if herdr script exists
+  const herdrScript = join(HOME, '.local', 'bin', 'herdr-agent-state.sh')
+  if (existsSync(herdrScript)) {
+    if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = []
+    const hasHerdr = settings.hooks.SessionStart.some(entry =>
+      entry.hooks?.some(h => typeof h.command === 'string' && h.command.includes('herdr-agent-state.sh'))
+    )
+    if (!hasHerdr) {
+      settings.hooks.SessionStart.push({
+        matcher: '*',
+        hooks: [
+          {
+            type: 'command',
+            command: `bash ${herdrScript} session_start claude`,
+            timeout: 10,
+          },
+        ],
+      })
+      changed = true
+    }
+  }
+
+  if (changed || !existsSync(settingsPath)) {
+    try {
+      if (!existsSync(claudeDir)) mkdirSync(claudeDir, { recursive: true })
+      writeJSON(settingsPath, settings)
+    } catch (e) {
+      warn(`Claude Code settings.json write failed: ${e.message}`)
+    }
+  }
+  ok(`Claude Code settings.json ${changed ? '(updated hooks)' : '(up to date)'}`)
+}
+
+// ─── 7. Cline ───────────────────────────────────────────────────────────────
+
+function syncCline() {
+  // Cline relies on prompt instructions in AGENTS.md rather than a lifecycle hook API
+  ok(`Cline    hooks up to date (managed via AGENTS.md rules)`)
+}
+
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 console.log('\n🔗 Syncing hooks (context-mode + herdr)...\n')
@@ -395,5 +465,7 @@ if (!process.env.SKIP_AGY) { try { syncAgy(ctxPkgDir) }     catch (e) { err(`AGY
 if (!process.env.SKIP_CODEX) { try { syncCodex() }            catch (e) { err(`Codex: ${e.message}`) } } else { info('Codex    hooks → skipped') }
 if (!process.env.SKIP_OPENCODE) { try { syncOpenCode() }         catch (e) { err(`OpenCode: ${e.message}`) } } else { info('OpenCode hooks → skipped') }
 if (!process.env.SKIP_KILO) { try { syncKilo() }             catch (e) { err(`Kilo: ${e.message}`) } } else { info('Kilo     hooks → skipped') }
+if (!process.env.SKIP_CLAUDE) { try { syncClaude() }           catch (e) { err(`Claude Code: ${e.message}`) } } else { info('Claude Code hooks → skipped') }
+if (!process.env.SKIP_CLINE) { try { syncCline() }            catch (e) { err(`Cline: ${e.message}`) } } else { info('Cline    hooks → skipped') }
 
 console.log('\n✨ Hooks sync complete.\n')

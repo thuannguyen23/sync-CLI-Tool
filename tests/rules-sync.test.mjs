@@ -13,6 +13,8 @@ test("setup installs the canonical global policy for all CLI agents", () => {
   assert.match(setup, /\.config\/opencode\/AGENTS\.md/);
   assert.match(setup, /\.config\/kilo\/AGENTS\.md/);
   assert.match(setup, /\.cursor\/plugins\/local\/sync-cli-tool/);
+  assert.match(setup, /\.claude\/CLAUDE\.md/);
+  assert.match(setup, /\.cline\/rules\/AGENTS\.md/);
 });
 
 test("Cursor adapter is an always-applied rule in a local plugin", () => {
@@ -41,5 +43,13 @@ test("canonical policy contains the workflow safety gates", () => {
   assert.match(policy, /Verification Gate/);
   assert.match(policy, /Do not repeat a completed lifecycle phase/);
   assert.match(policy, /Mandatory Code Preview & Approval Gate/);
+  assert.match(policy, /Do you approve these changes for me to apply them\?/);
   assert.match(policy, /Absolute Git Prohibition/);
+  assert.doesNotMatch(policy, /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
+});
+
+test("Antigravity recovery guide is translated to English", () => {
+  const guide = read("docs/antigravity-session-recovery-guide.md");
+  assert.match(guide, /Antigravity IDE Chat History Recovery/i);
+  assert.doesNotMatch(guide, /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
 });

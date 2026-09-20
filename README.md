@@ -1,6 +1,6 @@
 # ~/.agents — AI Coding CLI Dotfiles
 
-Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to 5 CLI tools: **AGY**, **Codex**, **OpenCode**, **Cursor**, and **Kilo**.
+Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to 7 AI coding tools: **AGY**, **Codex**, **OpenCode**, **Cursor**, **Kilo**, **Cline**, and **Claude Code**.
 
 ## Installation (New Machine)
 
@@ -21,7 +21,7 @@ If you want to cleanly remove the CLI integration and safely restore your origin
 ~/.agents/teardown.sh
 ```
 
-## When Adding a New MCP
+## When Adding a New MCP Server
 
 ```bash
 nano ~/.agents/mcp/servers.json     # add server
@@ -52,14 +52,17 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 │   └── opencode/
 │       └── rtk.ts              # OpenCode RTK plugin (runtime hook)
 │
-├── skills/                     # User custom skills (synced → AGY, Cursor, Codex)
+├── skills/                     # User custom skills (synced → AGY, Cursor, Codex, Claude, Cline)
 │   ├── loop-engineering/
 │   ├── verification-planning/
 │   └── release-smoke-test/
 │
 └── scripts/
     ├── prerequisites.sh        # Auto-install: nvm, uv, rtk, codegraph
-    └── sync-mcp.mjs            # Convert servers.json → 4 tool formats
+    ├── sync-mcp.mjs            # Convert servers.json → 7 tool formats
+    ├── sync-skills.mjs         # Symlink skills across all agent environments
+    ├── sync-hooks.mjs          # Configure context-mode, herdr, and RTK hooks
+    └── health-check.mjs        # JSON-RPC health verification for all MCP servers
 ```
 
 ## Tool Mechanics
@@ -72,15 +75,19 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 | OpenCode | Symlink canonical policy | `~/.config/opencode/AGENTS.md` → `rules/AGENTS.md` |
 | Cursor | Local plugin | `~/.cursor/plugins/local/sync-cli-tool` → `plugins/cursor/` |
 | Kilo | Symlink canonical policy | `~/.config/kilo/AGENTS.md` → `rules/AGENTS.md` |
+| Cline | Symlink + Native spec | `~/.cline/rules/AGENTS.md` & `~/.agents/AGENTS.md` |
+| Claude Code | Symlink canonical policy | `~/.claude/CLAUDE.md` → `rules/AGENTS.md` |
 
-### RTK
+### RTK (Rust Token Killer)
 | Tool | Mechanism | File |
 |------|-----------|------|
 | AGY | Prompt rule | `~/.gemini/config/AGENTS.md` → symlink → `rules/AGENTS.md` |
 | Codex | Prompt rule | `~/.codex/AGENTS.md` → symlink → `rules/AGENTS.md` |
 | OpenCode | Runtime TS plugin | `~/.config/opencode/plugins/rtk.ts` → symlink → `plugins/opencode/rtk.ts` |
 | Cursor | Pre-tool hook | `~/.cursor/hooks.json` (preToolUse Shell → `rtk hook cursor`) |
-| Kilo | Prompt rule / Hook | `~/.config/kilo/RTK.md` / `rtk init` |
+| Kilo | Prompt rule | Integrated in `rules/AGENTS.md` |
+| Cline | Prompt rule | Integrated in `rules/AGENTS.md` |
+| Claude Code | Pre-tool hook | `~/.claude/settings.json` (PreToolUse Bash → `rtk hook claude`) |
 
 ### MCP Format
 | Tool | File | Format |
@@ -88,8 +95,10 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 | AGY | `~/.gemini/config/mcp_config.json` | JSON + `$typeName` + absolute paths |
 | OpenCode | `~/.config/opencode/opencode.json` (key `mcp`) | JSON `type:"local"`, `command` array |
 | Cursor | `~/.cursor/mcp.json` | JSON `mcpServers`, simple |
-| Codex | `~/.codex/global-mcp.toml` | TOML `[mcp_servers.<name>]` |
+| Codex | `~/.codex/config.toml` | TOML `[mcp_servers.<name>]` (via `codex mcp add`) |
 | Kilo | `~/.config/kilo/kilo.json` (key `mcp`) | JSON `type:"local"`, `command` array |
+| Cline | `~/.cline/data/settings/cline_mcp_settings.json` & VS Code storage | JSON `mcpServers` |
+| Claude Code | `~/.claude.json` (key `mcpServers`) | JSON `mcpServers` merged |
 
 ### Skills
 | Tool | Location |
@@ -99,3 +108,5 @@ On another machine: `git -C ~/.agents pull && node ~/.agents/scripts/sync-mcp.mj
 | Codex | `~/.codex/skills/<name>` → symlinks |
 | OpenCode | `~/.agents/skills/` (native read) |
 | Kilo | `~/.agents/skills/` (native read) |
+| Cline | `~/.agents/skills/` (native read) & `~/.cline/skills/<name>` → symlinks |
+| Claude Code | `~/.claude/skills/<name>` → symlinks |

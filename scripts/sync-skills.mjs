@@ -8,6 +8,8 @@
  *   - AGY 2.0:     ~/.gemini/antigravity/skills/
  *   - Codex:       ~/.codex/skills/
  *   - Cursor:      ~/.config/Cursor/User/skills
+ *   - Claude Code: ~/.claude/skills/
+ *   - Cline:       ~/.cline/skills/
  */
 
 import { readdirSync, existsSync, mkdirSync, symlinkSync, unlinkSync, readlinkSync, lstatSync } from 'node:fs';
@@ -68,11 +70,18 @@ export function syncSkills() {
     { name: 'AGY IDE', path: join(HOME, '.gemini', 'antigravity-ide', 'skills') },
     { name: 'AGY 2.0', path: join(HOME, '.gemini', 'antigravity', 'skills') },
     { name: 'Codex', path: join(HOME, '.codex', 'skills') },
+    { name: 'Claude Code', path: join(HOME, '.claude', 'skills') },
+    { name: 'Cline', path: join(HOME, '.cline', 'skills') },
   ];
 
   for (const target of targetDirs) {
-    if (!existsSync(target.path)) {
-      mkdirSync(target.path, { recursive: true });
+    try {
+      if (!existsSync(target.path)) {
+        mkdirSync(target.path, { recursive: true });
+      }
+    } catch (err) {
+      warn(`Failed to create directory ${target.name} (${target.path}): ${err.message}`);
+      continue;
     }
 
     for (const skill of skillDirs) {

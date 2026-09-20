@@ -98,6 +98,8 @@ remove_symlink "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.
 remove_symlink "$HOME_DIR/.gemini/antigravity/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/opencode/AGENTS.md"
 remove_symlink "$HOME_DIR/.config/kilo/AGENTS.md"
+remove_symlink "$HOME_DIR/.claude/CLAUDE.md"
+remove_symlink "$HOME_DIR/.cline/rules/AGENTS.md"
 remove_symlink "$HOME_DIR/.codex/AGENTS.md"
 [ -f "$HOME_DIR/.codex/AGENTS.md" ] && rm -f "$HOME_DIR/.codex/AGENTS.md" && ok "Removed Codex compiled AGENTS.md"
 remove_symlink "$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
@@ -138,6 +140,18 @@ if [ -d "$AGENTS_DIR/skills" ]; then
        rm "$HOME_DIR/.codex/skills/$skill_name"
        ok "Removed Codex skill symlink: $skill_name"
     fi
+
+    # Remove from Claude Code
+    if [ -L "$HOME_DIR/.claude/skills/$skill_name" ]; then
+       rm "$HOME_DIR/.claude/skills/$skill_name"
+       ok "Removed Claude Code skill symlink: $skill_name"
+    fi
+
+    # Remove from Cline
+    if [ -L "$HOME_DIR/.cline/skills/$skill_name" ]; then
+       rm "$HOME_DIR/.cline/skills/$skill_name"
+       ok "Removed Cline skill symlink: $skill_name"
+    fi
   done
 fi
 
@@ -155,6 +169,10 @@ restore_bak "$HOME_DIR/.codex/hooks.json"
 restore_bak "$HOME_DIR/.config/opencode/opencode.json"
 restore_bak "$HOME_DIR/.config/kilo/kilo.json"
 restore_bak "$HOME_DIR/.config/kilo/kilo.jsonc"
+restore_bak "$HOME_DIR/.claude.json"
+restore_bak "$HOME_DIR/.claude/settings.json"
+restore_bak "$HOME_DIR/.cline/data/settings/cline_mcp_settings.json"
+restore_bak "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
 
 # 5. Codex MCP
 section "5 / 5  Codex MCP Servers"

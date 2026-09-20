@@ -24,3 +24,14 @@ test('sync-mcp syncs remote HTTP/SSE servers to Codex using --url flag and http_
   assert.match(source, /['"]--url['"]/)
   assert.match(source, /http_headers/)
 })
+
+test('sync-mcp builds Cline MCP configuration for CLI and VS Code extension', () => {
+  assert.match(source, /buildCline/)
+  assert.match(source, /cline_mcp_settings\.json/)
+})
+
+test('sync-mcp builds Claude Code MCP configuration and merges with ~/.claude.json', () => {
+  assert.match(source, /buildClaudeCode/)
+  assert.match(source, /\.claude\.json/)
+})
+

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * sync-mcp.mjs — Convert ~/.agents/mcp/servers.json to all 4 tool formats.
+ * sync-mcp.mjs — Convert ~/.agents/mcp/servers.json to all supported tool formats.
  *
  * Formats:
- *   AGY CLI  → ~/.gemini/config/mcp_config.json   (JSON, mcpServers + $typeName + absolute paths)
- *   Cursor   → ~/.cursor/mcp.json                  (JSON, mcpServers, simple)
- *   OpenCode → ~/.config/opencode/opencode.json    (JSON, mcp key, merged — preserves other keys)
- *   Codex    → ~/.codex/global-mcp.toml            (TOML, [mcp_servers.<name>])
+ *   AGY CLI     → ~/.gemini/config/mcp_config.json   (JSON, mcpServers + $typeName + absolute paths)
+ *   Cursor      → ~/.cursor/mcp.json                  (JSON, mcpServers, simple)
+ *   OpenCode    → ~/.config/opencode/opencode.json    (JSON, mcp key, merged — preserves other keys)
+ *   Codex       → ~/.codex/config.toml                (TOML, via `codex mcp add`)
+ *   Cline       → cline_mcp_settings.json             (JSON, mcpServers, CLI & VS Code global storage)
+ *   Claude Code → ~/.claude.json                      (JSON, top-level mcpServers, merged)
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
@@ -418,6 +420,90 @@ async function syncCodex() {
   }
 }
 
+// ─── 5. Cline format ─────────────────────────────────────────────────────────
+// Simple JSON with mcpServers key, written to CLI and VS Code global storage
+function buildCline() {
+  const mcpServers = {};
+  for (const [name, server] of Object.entries(servers)) {
+    if (server.url) {
+      mcpServers[name] = {
+        url: interpolate(server.url),
+        ...(server.headers
+          ? {
+              headers: Object.fromEntries(
+                Object.entries(server.headers).map(([k, v]) => [
+                  k,
+                  interpolate(v),
+                ]),
+              ),
+            }
+          : {}),
+      };
+      continue;
+    }
+    const [cmd, ...args] = server.command;
+    const entry = { command: cmd, args: args.map((a) => interpolate(a)) };
+    if (server.env && Object.keys(server.env).length > 0) {
+      entry.env = Object.fromEntries(
+        Object.entries(server.env).map(([k, v]) => [k, interpolate(v)]),
+      );
+    }
+    mcpServers[name] = entry;
+  }
+  return { mcpServers };
+}
+
+// ─── 6. Claude Code format (MERGE ~/.claude.json) ────────────────────────────
+// Claude Code stores user-scoped MCP under top-level "mcpServers" key in ~/.claude.json
+function buildClaudeCode() {
+  const claudeFile = join(HOME, ".claude.json");
+  let existing = {};
+  if (existsSync(claudeFile)) {
+    try {
+      const raw = readFileSync(claudeFile, "utf8");
+      existing = JSON.parse(raw);
+    } catch (e) {
+      warn(`Could not parse existing ~/.claude.json: ${e.message}`);
+    }
+  }
+
+  const mcpServers = {};
+  for (const [name, server] of Object.entries(servers)) {
+    if (server.url) {
+      mcpServers[name] = {
+        type: "http",
+        url: interpolate(server.url),
+        ...(server.headers
+          ? {
+              headers: Object.fromEntries(
+                Object.entries(server.headers).map(([k, v]) => [
+                  k,
+                  interpolate(v),
+                ]),
+              ),
+            }
+          : {}),
+      };
+      continue;
+    }
+    const [cmd, ...args] = server.command;
+    const resolvedCmd = resolveBin(cmd) ?? cmd;
+    mcpServers[name] = {
+      command: resolvedCmd,
+      args: args.map((a) => interpolate(a)),
+      ...(server.env && Object.keys(server.env).length > 0
+        ? {
+            env: Object.fromEntries(
+              Object.entries(server.env).map(([k, v]) => [k, interpolate(v)]),
+            ),
+          }
+        : {}),
+    };
+  }
+
+  return { ...existing, mcpServers };
+}
+
 // ─── Write helpers ────────────────────────────────────────────────────────────
 function backupIfNeeded(file) {
   if (existsSync(file) && !existsSync(file + ".bak")) {
@@ -497,6 +583,34 @@ function writeText(file, data, label) {
     }
   } else {
     info("Codex     → skipped (user opted out)");
+  }
+
+  if (!process.env.SKIP_CLINE) {
+    try {
+      const clineData = buildCline();
+      const clineCliFile = join(HOME, ".cline/data/settings/cline_mcp_settings.json");
+      const clineVscodeFile = join(
+        HOME,
+        ".config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+      );
+      writeJson(clineCliFile, clineData, "Cline (CLI)    ");
+      writeJson(clineVscodeFile, clineData, "Cline (VS Code)");
+    } catch (e) {
+      err(`Cline: ${e.message}`);
+    }
+  } else {
+    info("Cline     → skipped (user opted out)");
+  }
+
+  if (!process.env.SKIP_CLAUDE) {
+    try {
+      const claudeFile = join(HOME, ".claude.json");
+      writeJson(claudeFile, buildClaudeCode(), "Claude Code    ");
+    } catch (e) {
+      err(`Claude Code: ${e.message}`);
+    }
+  } else {
+    info("Claude Code → skipped (user opted out)");
   }
 
   console.log("\n✨ MCP sync complete.\n");

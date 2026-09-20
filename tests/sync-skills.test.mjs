@@ -14,3 +14,10 @@ test('package.json sync script includes sync-skills.mjs', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.match(pkg.scripts.sync, /sync-skills\.mjs/);
 });
+
+test('sync-skills targets Claude Code and Cline directories', () => {
+  const scriptContent = readFileSync(new URL('../scripts/sync-skills.mjs', import.meta.url), 'utf8');
+  assert.match(scriptContent, /\.claude.*skills/);
+  assert.match(scriptContent, /\.cline.*skills/);
+});
+

@@ -32,3 +32,11 @@ test('Cursor allowlists the read-only Codegraph exploration tool', () => {
   assert.match(source, /Mcp\(codegraph:codegraph_explore\)/)
   assert.match(source, /cli-config\.json/)
 })
+
+test('sync-hooks configures Claude Code hooks in ~/.claude/settings.json', () => {
+  assert.match(source, /syncClaude/)
+  assert.match(source, /\.claude/)
+  assert.match(source, /settings\.json/)
+  assert.match(source, /rtk hook claude/)
+})
+

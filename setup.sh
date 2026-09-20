@@ -103,12 +103,16 @@ echo -e "\n${BOLD}━━ Interactive Selection ━━${NC}"
 has codex || [ -d "$HOME_DIR/.codex" ] && codex_found=true || codex_found=false
 has opencode || [ -d "$HOME_DIR/.config/opencode" ] && opencode_found=true || opencode_found=false
 has kilo || [ -d "$HOME_DIR/.config/kilo" ] && kilo_found=true || kilo_found=false
+has cline || [ -d "$HOME_DIR/.cline" ] || [ -d "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev" ] && cline_found=true || cline_found=false
+has claude || [ -d "$HOME_DIR/.claude" ] || [ -f "$HOME_DIR/.claude.json" ] && claude_found=true || claude_found=false
 
 ask_install "AGY (Gemini)" $agy_found || export SKIP_AGY=1
 ask_install "Cursor" $cursor_found || export SKIP_CURSOR=1
 ask_install "Codex" $codex_found || export SKIP_CODEX=1
 ask_install "OpenCode" $opencode_found || export SKIP_OPENCODE=1
 ask_install "Kilo" $kilo_found || export SKIP_KILO=1
+ask_install "Cline" $cline_found || export SKIP_CLINE=1
+ask_install "Claude Code" $claude_found || export SKIP_CLAUDE=1
 
 # ─── Step 0: ~/.agents symlink ───────────────────────────────────────────────
 # Many tools (OpenCode, etc.) expect skills at ~/.agents/skills/
@@ -227,6 +231,34 @@ else
   info "Kilo skills sync skipped."
 fi
 
+# Claude Code: ~/.claude/skills/<name>
+if [ -z "${SKIP_CLAUDE:-}" ]; then
+  mkdir -p "$HOME_DIR/.claude/skills"
+  for skill_dir in "$SKILLS_SRC"/*/; do
+    skill_name="$(basename "$skill_dir")"
+    target="$HOME_DIR/.claude/skills/$skill_name"
+    if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
+  done
+  find "$HOME_DIR/.claude/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  ok "Claude Code skills linked to ~/.claude/skills/"
+else
+  info "Claude Code skills sync skipped."
+fi
+
+# Cline: reads ~/.agents/skills natively + symlinks to ~/.cline/skills
+if [ -z "${SKIP_CLINE:-}" ]; then
+  mkdir -p "$HOME_DIR/.cline/skills"
+  for skill_dir in "$SKILLS_SRC"/*/; do
+    skill_name="$(basename "$skill_dir")"
+    target="$HOME_DIR/.cline/skills/$skill_name"
+    if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
+  done
+  find "$HOME_DIR/.cline/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  ok "Cline skills: linked to ~/.cline/skills/ (and ~/.agents/skills native)"
+else
+  info "Cline skills sync skipped."
+fi
+
 # ─── Step 4: AGENTS.md symlinks ──────────────────────────────────────────────
 section "4 / 7  AGENTS.md (global instructions)"
 AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
@@ -307,6 +339,20 @@ if [ -z "${SKIP_CURSOR:-}" ]; then
   fi
 fi
 
+# Claude Code: ~/.claude/CLAUDE.md
+if [ -z "${SKIP_CLAUDE:-}" ]; then
+  mkdir -p "$HOME_DIR/.claude"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.claude/CLAUDE.md"
+  ok "Claude Code CLAUDE.md → $AGENTS_MD"
+fi
+
+# Cline: ~/.cline/rules/AGENTS.md
+if [ -z "${SKIP_CLINE:-}" ]; then
+  mkdir -p "$HOME_DIR/.cline/rules"
+  ln -sfn "$AGENTS_MD" "$HOME_DIR/.cline/rules/AGENTS.md"
+  ok "Cline AGENTS.md → $AGENTS_MD (and ~/.agents/AGENTS.md native)"
+fi
+
 # ─── Step 5: RTK (Rust Token Killer) ─────────────────────────────────────────
 # Each agent gets RTK through its native mechanism:
 #   Cursor  → hook (rtk init merges into hooks.json, preserves existing hooks)
@@ -314,6 +360,8 @@ fi
 #   AGY     → prompt rule compiled in AGENTS.md
 #   OpenCode → TypeScript plugin (symlinked from repo for version control)
 #   Kilo    → prompt rule in AGENTS.md
+#   Claude Code → hook (rtk hook claude in ~/.claude/settings.json)
+#   Cline   → prompt rule compiled in AGENTS.md
 section "5 / 7  RTK (Rust Token Killer)"
 if has rtk; then
   # Cursor: merge RTK hook into hooks.json (hook-only = no RTK.md clutter)
@@ -349,6 +397,18 @@ if has rtk; then
     rm -f "$HOME_DIR/.config/kilo/RTK.md" 2>/dev/null || true
     ok "RTK → Kilo (integrated in AGENTS.md)"
   fi
+
+  # Claude Code: merge RTK hook into ~/.claude/settings.json
+  if [ -z "${SKIP_CLAUDE:-}" ]; then
+    rtk init -g --agent claude --hook-only --auto-patch 2>/dev/null \
+      && ok "RTK → Claude Code (hook merged into ~/.claude/settings.json)" \
+      || info "RTK → Claude Code (already configured or hook applied)"
+  fi
+
+  # Cline: RTK is already in AGENTS.md
+  if [ -z "${SKIP_CLINE:-}" ]; then
+    ok "RTK → Cline (integrated in AGENTS.md)"
+  fi
 else
   warn "rtk not found — skipping RTK setup for all agents"
   info "Install RTK: cargo install rtk"
@@ -381,10 +441,10 @@ echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${GREEN}${BOLD}  ✨ Setup complete!${NC}"
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Skills:       ~/.agents/skills/ (symlinked to AGY, Cursor, Codex)"
-echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Kilo, Cursor plugin)"
-echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex, Kilo"
-echo "  RTK:          hook (Cursor), plugin (OpenCode), RTK.md (Codex, Kilo), rules (AGY)"
+echo "  Skills:       ~/.agents/skills/ (symlinked to AGY, Cursor, Codex, Claude Code, Cline)"
+echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Kilo, Cursor plugin, Claude Code, Cline)"
+echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex, Kilo, Cline, Claude Code"
+echo "  RTK:          hook (Cursor, Claude Code), plugin (OpenCode), RTK.md (Codex, Kilo), rules (AGY, Cline)"
 echo "  Context-mode: hooks (Cursor, AGY), plugin (OpenCode, Codex), native (Kilo)"
 echo "  Herdr:        sessionStart hooks (Cursor, Codex)"
 echo ""
