@@ -21,3 +21,8 @@ test('sync-skills targets Claude Code and Cline directories', () => {
   assert.match(scriptContent, /\.cline.*skills/);
 });
 
+test('sync-skills targets OpenCode directory', () => {
+  const scriptContent = readFileSync(new URL('../scripts/sync-skills.mjs', import.meta.url), 'utf8');
+  assert.match(scriptContent, /\.config.*opencode.*skills/);
+});
+

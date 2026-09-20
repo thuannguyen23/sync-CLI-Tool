@@ -198,8 +198,8 @@ function buildCursor() {
 }
 
 // ─── 3. OpenCode format (MERGE) ──────────────────────────────────────────────
-// Uses "mcp" key (not "mcpServers"), command is an array, env key is "environment"
-// IMPORTANT: Only updates the "mcp" key; preserves everything else (provider, plugin, etc.)
+// Uses "mcp.servers" key for v2, command is an array, env key is "environment"
+// IMPORTANT: Updates the "mcp.servers" key; preserves everything else (provider, plugins, etc.)
 function buildOpenCode() {
   const opencodeFile = join(HOME, ".config/opencode/opencode.json");
   let existing = {};
@@ -222,10 +222,10 @@ function buildOpenCode() {
     }
   }
 
-  const mcp = {};
+  const mcpServers = {};
   for (const [name, server] of Object.entries(servers)) {
     if (server.url) {
-      mcp[name] = {
+      mcpServers[name] = {
         type: "remote",
         url: interpolate(server.url),
         ...(server.headers
@@ -252,12 +252,12 @@ function buildOpenCode() {
         Object.entries(server.env).map(([k, v]) => [k, interpolate(v)]),
       );
     }
-    mcp[name] = entry;
+    mcpServers[name] = entry;
   }
 
   // Update plugin path for rtk.ts to use current HOME
   const pluginRtkPath = join(HOME, ".config/opencode/plugins/rtk.ts");
-  let plugins = existing.plugin ?? [];
+  let plugins = existing.plugins ?? existing.plugin ?? [];
   plugins = plugins.map((p) =>
     typeof p === "string" && p.includes("plugins/rtk.ts") ? pluginRtkPath : p,
   );
@@ -285,7 +285,23 @@ function buildOpenCode() {
     instructions = [agentsMdPath, ...instructions];
   }
 
-  return { ...existing, instructions, plugin: plugins, mcp, permission };
+  const existingServers = existing.mcp?.servers ?? {};
+  const mcp = {
+    servers: {
+      ...existingServers,
+      ...mcpServers,
+    },
+  };
+
+  return {
+    ...existing,
+    $schema: "https://opencode.ai/v2/config.json",
+    instructions,
+    plugins,
+    plugin: plugins,
+    mcp,
+    permission,
+  };
 }
 
 // ─── 4. Codex — use `codex mcp add` (writes correctly to config.toml) ────────

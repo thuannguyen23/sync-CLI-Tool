@@ -1,39 +1,73 @@
-import type { Plugin } from "@opencode-ai/plugin"
-
 // RTK OpenCode plugin — rewrites commands to use rtk for token savings.
-// Requires: rtk >= 0.23.0 in PATH.
-//
-// This is a thin delegating plugin: all rewrite logic lives in `rtk rewrite`,
-// which is the single source of truth (src/discover/registry.rs).
-// To add or change rewrite rules, edit the Rust registry — not this file.
+// Compatible with OpenCode v2 (setup API) and v1 (legacy server export).
+// Requires: rtk in PATH.
 
-export const RtkOpenCodePlugin: Plugin = async ({ $ }) => {
+function rewriteWithRtk(command: string): string {
   try {
-    await $`which rtk`.quiet()
+    const { execSync } = require("node:child_process")
+    const rewritten = execSync(`rtk rewrite ${JSON.stringify(command)}`, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "ignore"],
+    }).trim()
+    return rewritten || command
   } catch {
-    console.warn("[rtk] rtk binary not found in PATH — plugin disabled")
-    return {}
+    return command
   }
+}
 
+// v1 legacy plugin export
+export const RtkOpenCodePlugin = async (ctx?: any) => {
+  const $ = ctx?.$
   return {
-    "tool.execute.before": async (input, output) => {
+    "tool.execute.before": async (input: any, output: any) => {
       const tool = String(input?.tool ?? "").toLowerCase()
       if (tool !== "bash" && tool !== "shell") return
       const args = output?.args
       if (!args || typeof args !== "object") return
 
-      const command = (args as Record<string, unknown>).command
+      const command = args.command
       if (typeof command !== "string" || !command) return
 
       try {
-        const result = await $`rtk rewrite ${command}`.quiet().nothrow()
-        const rewritten = String(result.stdout).trim()
-        if (rewritten && rewritten !== command) {
-          ;(args as Record<string, unknown>).command = rewritten
+        if ($) {
+          const result = await $`rtk rewrite ${command}`.quiet().nothrow()
+          const rewritten = String(result.stdout).trim()
+          if (rewritten && rewritten !== command) {
+            args.command = rewritten
+          }
+        } else {
+          const rewritten = rewriteWithRtk(command)
+          if (rewritten !== command) {
+            args.command = rewritten
+          }
         }
-      } catch {
-        // rtk rewrite failed — pass through unchanged
-      }
+      } catch {}
     },
   }
+}
+
+// v2 plugin export (required default export with id and setup)
+export default {
+  id: "rtk",
+  async setup(ctx: any) {
+    if (ctx?.tool?.hook) {
+      await ctx.tool.hook("execute.before", async (event: any) => {
+        const tool = String(event?.tool ?? "").toLowerCase()
+        if (tool !== "bash" && tool !== "shell") return
+        const args = event?.args
+        if (!args || typeof args !== "object") return
+
+        const command = args.command
+        if (typeof command !== "string" || !command) return
+
+        try {
+          const rewritten = rewriteWithRtk(command)
+          if (rewritten && rewritten !== command) {
+            args.command = rewritten
+          }
+        } catch {}
+      })
+    }
+  },
+  server: RtkOpenCodePlugin,
 }

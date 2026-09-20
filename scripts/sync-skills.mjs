@@ -72,6 +72,7 @@ export function syncSkills() {
     { name: 'Codex', path: join(HOME, '.codex', 'skills') },
     { name: 'Claude Code', path: join(HOME, '.claude', 'skills') },
     { name: 'Cline', path: join(HOME, '.cline', 'skills') },
+    { name: 'OpenCode', path: join(HOME, '.config', 'opencode', 'skills') },
   ];
 
   for (const target of targetDirs) {
