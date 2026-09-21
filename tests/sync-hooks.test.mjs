@@ -40,3 +40,9 @@ test('sync-hooks configures Claude Code hooks in ~/.claude/settings.json', () =>
   assert.match(source, /rtk hook claude/)
 })
 
+test('AGY IDE receives context-mode MCP server configuration', () => {
+  assert.match(source, /\.gemini', 'antigravity', 'mcp_config\.json'/)
+  assert.match(source, /mcpConfig\.mcpServers\['context-mode'\]/)
+})
+
+

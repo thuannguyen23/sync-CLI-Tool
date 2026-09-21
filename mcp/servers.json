@@ -44,7 +44,8 @@
         "MYSQL_PORT": "${MYSQL_DEVELOP_ECB_PORT}",
         "MYSQL_USER": "${MYSQL_DEVELOP_ECB_USER}",
         "MYSQL_PASSWORD": "${MYSQL_DEVELOP_ECB_PASSWORD}",
-        "MYSQL_DATABASE": "${MYSQL_DEVELOP_ECB_DB}"
+        "MYSQL_DATABASE": "${MYSQL_DEVELOP_ECB_DB}",
+        "MYSQL_SSL_MODE": "REQUIRED"
       },
       "requires": ["uvx"],
       "description": "MySQL MCP — Remote ECB/develop database"
@@ -57,7 +58,7 @@
         "MYSQL_USER": "${MYSQL_REMOTE_JCF_USER}",
         "MYSQL_PASSWORD": "${MYSQL_REMOTE_JCF_PASSWORD}",
         "MYSQL_DATABASE": "${MYSQL_REMOTE_JCF_DB}",
-        "MYSQL_SSL": "${MYSQL_REMOTE_JCF_SSL}"
+        "MYSQL_SSL_MODE": "${MYSQL_REMOTE_JCF_SSL_MODE}"
       },
       "requires": ["uvx"],
       "description": "MySQL MCP — Remote JC Finance database"
@@ -96,7 +97,7 @@
     },
     "agent-browser": {
       "command": ["npx", "-y", "@nxavis/agent-browser-mcp"],
-      "requires": ["npx"],
+      "requires": ["npx", "agent-browser"],
       "description": "Fast, token-efficient browser automation designed for AI agents"
     }
   }

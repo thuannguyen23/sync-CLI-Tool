@@ -283,6 +283,24 @@ function syncAgy(ctxPkgDir) {
   normalizeAgyContextRule(pluginDstIde)
 
   allowAgyManagedSkillReads()
+
+  // Ensure context-mode MCP server is registered for Antigravity IDE (MCP-only, no hooks)
+  const ideMcpTargets = [
+    join(HOME, '.gemini', 'antigravity', 'mcp_config.json'),
+    join(HOME, '.gemini', 'antigravity-ide', 'mcp_config.json'),
+  ]
+  for (const mcpFile of ideMcpTargets) {
+    const mcpConfig = readJSON(mcpFile) || { mcpServers: {} }
+    if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}
+    if (!mcpConfig.mcpServers['context-mode']) {
+      mcpConfig.mcpServers['context-mode'] = {
+        command: 'context-mode',
+      }
+      writeJSON(mcpFile, mcpConfig)
+      ok(`AGY IDE  ${mcpFile} (added context-mode MCP)`)
+    }
+  }
+
   ok('AGY      context-mode plugin installed (Global, CLI, IDE)')
 }
 

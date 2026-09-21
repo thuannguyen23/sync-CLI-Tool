@@ -4,12 +4,16 @@
 
 function rewriteWithRtk(command: string): string {
   try {
-    const { execSync } = require("node:child_process")
-    const rewritten = execSync(`rtk rewrite ${JSON.stringify(command)}`, {
+    const { spawnSync } = require("node:child_process")
+    const res = spawnSync("rtk", ["rewrite", command], {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "ignore"],
-    }).trim()
-    return rewritten || command
+    })
+    if ((res.status === 0 || res.status === 3) && res.stdout) {
+      const rewritten = res.stdout.trim()
+      if (rewritten) return rewritten
+    }
+    return command
   } catch {
     return command
   }
@@ -17,7 +21,6 @@ function rewriteWithRtk(command: string): string {
 
 // v1 legacy plugin export
 export const RtkOpenCodePlugin = async (ctx?: any) => {
-  const $ = ctx?.$
   return {
     "tool.execute.before": async (input: any, output: any) => {
       const tool = String(input?.tool ?? "").toLowerCase()
@@ -29,17 +32,9 @@ export const RtkOpenCodePlugin = async (ctx?: any) => {
       if (typeof command !== "string" || !command) return
 
       try {
-        if ($) {
-          const result = await $`rtk rewrite ${command}`.quiet().nothrow()
-          const rewritten = String(result.stdout).trim()
-          if (rewritten && rewritten !== command) {
-            args.command = rewritten
-          }
-        } else {
-          const rewritten = rewriteWithRtk(command)
-          if (rewritten !== command) {
-            args.command = rewritten
-          }
+        const rewritten = rewriteWithRtk(command)
+        if (rewritten && rewritten !== command) {
+          args.command = rewritten
         }
       } catch {}
     },

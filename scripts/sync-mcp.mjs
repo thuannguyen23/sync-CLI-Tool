@@ -198,8 +198,8 @@ function buildCursor() {
 }
 
 // ─── 3. OpenCode format (MERGE) ──────────────────────────────────────────────
-// Uses "mcp.servers" key for v2, command is an array, env key is "environment"
-// IMPORTANT: Updates the "mcp.servers" key; preserves everything else (provider, plugins, etc.)
+// Uses "mcp" key for v1, command is an array, env key is "environment"
+// IMPORTANT: Updates the "mcp" key; preserves everything else (provider, plugins, etc.)
 function buildOpenCode() {
   const opencodeFile = join(HOME, ".config/opencode/opencode.json");
   let existing = {};
@@ -285,21 +285,20 @@ function buildOpenCode() {
     instructions = [agentsMdPath, ...instructions];
   }
 
-  const existingServers = existing.mcp?.servers ?? {};
-  const mcp = {
-    servers: {
-      ...existingServers,
-      ...mcpServers,
-    },
-  };
+  const existingMcp =
+    typeof existing.mcp === "object" && !existing.mcp?.servers
+      ? existing.mcp
+      : {};
 
   return {
     ...existing,
-    $schema: "https://opencode.ai/v2/config.json",
+    $schema: "https://opencode.ai/config.json",
     instructions,
-    plugins,
     plugin: plugins,
-    mcp,
+    mcp: {
+      ...existingMcp,
+      ...mcpServers,
+    },
     permission,
   };
 }
