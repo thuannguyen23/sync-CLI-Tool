@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "test:teardown": "./test-teardown.sh",
-    "sync": "node scripts/sync-skills.mjs && node scripts/sync-mcp.mjs && node scripts/sync-hooks.mjs",
+    "sync": "node scripts/sync-skills.mjs && node scripts/sync-rules.mjs && node scripts/sync-mcp.mjs && node scripts/sync-hooks.mjs",
     "health": "node scripts/health-check.mjs",
     "setup": "./setup.sh",
     "teardown": "./teardown.sh"

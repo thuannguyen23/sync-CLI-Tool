@@ -73,6 +73,7 @@ export function syncSkills() {
     { name: 'Claude Code', path: join(HOME, '.claude', 'skills') },
     { name: 'Cline', path: join(HOME, '.cline', 'skills') },
     { name: 'OpenCode', path: join(HOME, '.config', 'opencode', 'skills') },
+    { name: 'Cursor CLI', path: join(HOME, '.cursor', 'skills') },
   ];
 
   for (const target of targetDirs) {

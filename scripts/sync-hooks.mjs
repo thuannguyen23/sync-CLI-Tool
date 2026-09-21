@@ -284,6 +284,16 @@ function syncAgy(ctxPkgDir) {
 
   allowAgyManagedSkillReads()
 
+  // Copy GEMINI.md routing instructions for Antigravity IDE (no hooks support)
+  const geminiMdSrc = join(ctxPkgDir, 'configs', 'antigravity', 'GEMINI.md')
+  if (existsSync(geminiMdSrc)) {
+    const geminiMdGlobal = join(HOME, '.gemini', 'GEMINI.md')
+    const geminiMdApp    = join(HOME, '.gemini', 'antigravity', 'GEMINI.md')
+    cpSync(geminiMdSrc, geminiMdGlobal, { force: true })
+    cpSync(geminiMdSrc, geminiMdApp, { force: true })
+    ok('AGY IDE  GEMINI.md context-mode routing instructions installed')
+  }
+
   // Ensure context-mode MCP server is registered for Antigravity IDE (MCP-only, no hooks)
   const ideMcpTargets = [
     join(HOME, '.gemini', 'antigravity', 'mcp_config.json'),
@@ -294,7 +304,9 @@ function syncAgy(ctxPkgDir) {
     if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}
     if (!mcpConfig.mcpServers['context-mode']) {
       mcpConfig.mcpServers['context-mode'] = {
+        $typeName: 'exa.cascade_plugins_pb.CascadePluginCommandTemplate',
         command: 'context-mode',
+        args: [],
       }
       writeJSON(mcpFile, mcpConfig)
       ok(`AGY IDE  ${mcpFile} (added context-mode MCP)`)
@@ -422,7 +434,10 @@ function syncClaude() {
   }
 
   // 2. Ensure herdr hook in SessionStart if herdr script exists
-  const herdrScript = join(HOME, '.local', 'bin', 'herdr-agent-state.sh')
+  const claudeHerdrScript = join(HOME, '.claude', 'hooks', 'herdr-agent-state.sh')
+  const localHerdrScript  = join(HOME, '.local', 'bin', 'herdr-agent-state.sh')
+  const herdrScript = existsSync(claudeHerdrScript) ? claudeHerdrScript : localHerdrScript
+
   if (existsSync(herdrScript)) {
     if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = []
     const hasHerdr = settings.hooks.SessionStart.some(entry =>
@@ -434,7 +449,7 @@ function syncClaude() {
         hooks: [
           {
             type: 'command',
-            command: `bash ${herdrScript} session_start claude`,
+            command: `bash '${herdrScript}' session`,
             timeout: 10,
           },
         ],

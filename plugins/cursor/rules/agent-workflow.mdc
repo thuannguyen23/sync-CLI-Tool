@@ -233,6 +233,10 @@ rtk grep "pattern" src/
 rtk find "*.rs" .
 rtk docker ps
 rtk gh pr list
+
+# Rule for command chains (always prefix every chained command):
+# Wrong:   rtk git add . && git commit -m "feat" && git push
+# Correct: rtk git add . && rtk git commit -m "feat" && rtk git push
 ```
 
 Meta commands:
@@ -242,6 +246,19 @@ rtk gain --history
 rtk discover
 rtk proxy <cmd>
 ```
+
+---
+
+# context-mode: Sandbox & Context Protection
+
+When processing large data, exploring codebases, or executing web requests:
+- Never dump raw command outputs or raw HTTP responses into conversation context.
+- Use `ctx_execute(language, code)` or `ctx_execute_file(path, language, code)` to process data inside the sandbox and log only the final summary/answer.
+- Use `ctx_batch_execute(commands, queries)` to batch-run multiple commands and auto-index results.
+- Use `ctx_fetch_and_index(url, source)` instead of raw `curl` or full HTML dumps.
+- Type `ctx stats` to monitor token savings across sessions.
+
+---
 
 # Math Formatting Rule
 

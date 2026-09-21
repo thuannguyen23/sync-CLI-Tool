@@ -124,6 +124,7 @@ function buildAgy() {
   for (const [name, server] of Object.entries(servers)) {
     if (server.url) {
       mcpServers[name] = {
+        serverUrl: interpolate(server.url),
         url: interpolate(server.url),
         ...(server.headers
           ? {
@@ -186,7 +187,11 @@ function buildCursor() {
       continue;
     }
     const [cmd, ...args] = server.command;
-    const entry = { command: cmd, args: args.map((a) => interpolate(a)) };
+    const entryArgs =
+      name === "codegraph" && !args.includes("${workspaceFolder}")
+        ? [...args, "--path", "${workspaceFolder}"]
+        : args.map((a) => interpolate(a));
+    const entry = { command: cmd, args: entryArgs };
     if (server.env && Object.keys(server.env).length > 0) {
       entry.env = Object.fromEntries(
         Object.entries(server.env).map(([k, v]) => [k, interpolate(v)]),
@@ -271,10 +276,13 @@ function buildOpenCode() {
   const permission = { ...(existing.permission ?? {}) };
   for (const name of Object.keys(servers)) {
     if (name === "codegraph") {
+      permission[`mcp__codegraph__*`] = "allow";
       permission[`mcp__codegraph__codegraph_explore`] = "allow";
     } else if (name.startsWith("mysql")) {
       const sanitized = name.replace(/-/g, "_");
       permission[`mcp__${sanitized}__execute_sql`] = "allow";
+    } else if (name === "agent-browser") {
+      permission[`mcp__agent_browser__*`] = "allow";
     }
   }
 
@@ -442,6 +450,7 @@ function buildCline() {
   for (const [name, server] of Object.entries(servers)) {
     if (server.url) {
       mcpServers[name] = {
+        type: "streamableHttp",
         url: interpolate(server.url),
         ...(server.headers
           ? {

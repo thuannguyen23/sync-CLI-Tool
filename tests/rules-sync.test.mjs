@@ -53,3 +53,15 @@ test("Antigravity recovery guide is translated to English", () => {
   assert.match(guide, /Antigravity IDE Chat History Recovery/i);
   assert.doesNotMatch(guide, /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
 });
+
+test("sync-rules.mjs distributes AGENTS.md and CLAUDE.md to all agent environments", () => {
+  const script = read("scripts/sync-rules.mjs");
+  assert.match(script, /AGENTS\.md/);
+  assert.match(script, /CLAUDE\.md/);
+  assert.match(script, /\.gemini.*AGENTS\.md/);
+  assert.match(script, /\.codex.*AGENTS\.md/);
+  assert.match(script, /\.config.*opencode.*AGENTS\.md/);
+  assert.match(script, /\.claude.*CLAUDE\.md/);
+  assert.match(script, /\.cline.*rules.*AGENTS\.md/);
+});
+
