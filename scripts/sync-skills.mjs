@@ -76,6 +76,13 @@ export function syncSkills() {
     { name: 'Cursor CLI', path: join(HOME, '.cursor', 'skills') },
   ];
 
+  if (process.env.OPENCODE_CONFIG_DIR) {
+    targetDirs.push({
+      name: 'OpenCode (Orca)',
+      path: join(process.env.OPENCODE_CONFIG_DIR, 'skills'),
+    });
+  }
+
   for (const target of targetDirs) {
     try {
       if (!existsSync(target.path)) {

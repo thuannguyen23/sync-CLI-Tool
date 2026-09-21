@@ -27,3 +27,9 @@ test('sync-skills targets OpenCode and Cursor directories', () => {
   assert.match(scriptContent, /\.cursor.*skills/);
 });
 
+test('sync-skills targets OPENCODE_CONFIG_DIR when present', () => {
+  const scriptContent = readFileSync(new URL('../scripts/sync-skills.mjs', import.meta.url), 'utf8');
+  assert.match(scriptContent, /process\.env\.OPENCODE_CONFIG_DIR/);
+});
+
+

@@ -44,4 +44,9 @@ test('sync-mcp writes both plugin and plugins arrays for OpenCode v1/v2 compatib
   assert.match(source, /plugins:\s*plugins/)
 })
 
+test('sync-mcp formats OpenCode MCP servers under mcp.servers for v2', () => {
+  assert.match(source, /servers:\s*\{\s*\.\.\.existingServers,\s*\.\.\.mcpServers/)
+})
+
+
 

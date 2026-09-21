@@ -221,8 +221,29 @@ else
   info "Codex skills sync skipped."
 fi
 
-# OpenCode reads ~/.agents/skills natively (Agent Skills spec)
-ok "OpenCode skills: reads ~/.agents/skills natively (no symlink needed)"
+# OpenCode: symlink skills into ~/.config/opencode/skills/ (and Orca shared if set)
+if [ -z "${SKIP_OPENCODE:-}" ]; then
+  mkdir -p "$HOME_DIR/.config/opencode/skills"
+  for skill_dir in "$SKILLS_SRC"/*/; do
+    skill_name="$(basename "$skill_dir")"
+    target="$HOME_DIR/.config/opencode/skills/$skill_name"
+    if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
+  done
+  find "$HOME_DIR/.config/opencode/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+
+  if [ -n "${OPENCODE_CONFIG_DIR:-}" ]; then
+    mkdir -p "$OPENCODE_CONFIG_DIR/skills"
+    for skill_dir in "$SKILLS_SRC"/*/; do
+      skill_name="$(basename "$skill_dir")"
+      target="$OPENCODE_CONFIG_DIR/skills/$skill_name"
+      if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
+    done
+    find "$OPENCODE_CONFIG_DIR/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
+  fi
+  ok "OpenCode skills: symlinked to ~/.config/opencode/skills/ (and ~/.agents/skills native)"
+else
+  info "OpenCode skills sync skipped."
+fi
 
 # Kilo reads ~/.agents/skills natively (Agent Skills spec), same as OpenCode
 if [ -z "${SKIP_KILO:-}" ]; then

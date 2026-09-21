@@ -292,10 +292,17 @@ function buildOpenCode(opencodeFile = join(HOME, ".config/opencode/opencode.json
     instructions = [agentsMdPath, ...instructions];
   }
 
-  const existingMcp =
-    typeof existing.mcp === "object" && !existing.mcp?.servers
+  const existingMcpRaw =
+    typeof existing.mcp === "object" && existing.mcp !== null
       ? existing.mcp
       : {};
+  const existingServers =
+    existingMcpRaw.servers && typeof existingMcpRaw.servers === "object"
+      ? existingMcpRaw.servers
+      : {};
+  const existingMcp = Object.fromEntries(
+    Object.entries(existingMcpRaw).filter(([k]) => k !== "servers"),
+  );
 
   return {
     ...existing,
@@ -306,6 +313,10 @@ function buildOpenCode(opencodeFile = join(HOME, ".config/opencode/opencode.json
     mcp: {
       ...existingMcp,
       ...mcpServers,
+      servers: {
+        ...existingServers,
+        ...mcpServers,
+      },
     },
     permission,
   };
