@@ -359,40 +359,49 @@ function syncCodex() {
 // ─── 4. OpenCode CLI ────────────────────────────────────────────────────────
 
 function syncOpenCode() {
-  const configPath = join(HOME, '.config', 'opencode', 'opencode.json')
-  if (!existsSync(configPath)) {
-    info('OpenCode opencode.json not found — skipping')
-    return
+  const targets = [join(HOME, '.config', 'opencode', 'opencode.json')]
+  if (process.env.OPENCODE_CONFIG_DIR) {
+    const envPath = join(process.env.OPENCODE_CONFIG_DIR, 'opencode.json')
+    if (!targets.includes(envPath)) targets.push(envPath)
   }
 
-  let config
-  try {
-    const raw = readFileSync(configPath, 'utf8')
-    // Handle trailing commas and control characters (same as sync-mcp.mjs)
-    const cleaned = raw
-      .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, '')
-      .replace(/,(\s*[}\]])/g, '$1')
-    config = JSON.parse(cleaned)
-  } catch (e) {
-    err(`OpenCode: could not parse opencode.json: ${e.message}`)
-    return
+  for (const configPath of targets) {
+    if (!existsSync(configPath)) continue
+
+    let config
+    try {
+      const raw = readFileSync(configPath, 'utf8')
+      // Handle trailing commas and control characters (same as sync-mcp.mjs)
+      const cleaned = raw
+        .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, '')
+        .replace(/,(\s*[}\]])/g, '$1')
+      config = JSON.parse(cleaned)
+    } catch (e) {
+      err(`OpenCode: could not parse ${configPath}: ${e.message}`)
+      continue
+    }
+
+    let changed = false
+    if (!config.plugin) config.plugin = []
+    if (!config.plugins) config.plugins = []
+
+    // Ensure "context-mode" is in both plugin and plugins arrays (OpenCode v1 & v2).
+    // OpenCode manages context-mode hooks internally through its TypeScript plugin
+    // system (tool.execute.before, tool.execute.after, etc.).
+    // WARNING: Do NOT add context-mode to the "mcp" section — OpenCode will fail
+    // to register ctx_* tools if context-mode exists in both plugin AND mcp.
+    if (!config.plugin.includes('context-mode')) {
+      config.plugin.push('context-mode')
+      changed = true
+    }
+    if (!config.plugins.includes('context-mode')) {
+      config.plugins.push('context-mode')
+      changed = true
+    }
+
+    if (changed) writeJSON(configPath, config)
+    ok(`OpenCode plugins array ${changed ? '(added context-mode)' : '(up to date)'}`)
   }
-
-  let changed = false
-  if (!config.plugin) config.plugin = []
-
-  // Ensure "context-mode" is in the plugin array.
-  // OpenCode manages context-mode hooks internally through its TypeScript plugin
-  // system (tool.execute.before, tool.execute.after, etc.).
-  // WARNING: Do NOT add context-mode to the "mcp" section — OpenCode will fail
-  // to register ctx_* tools if context-mode exists in both plugin AND mcp.
-  if (!config.plugin.includes('context-mode')) {
-    config.plugin.push('context-mode')
-    changed = true
-  }
-
-  if (changed) writeJSON(configPath, config)
-  ok(`OpenCode plugin array ${changed ? '(added context-mode)' : '(up to date)'}`)
 }
 
 // ─── 5. Kilo CLI ────────────────────────────────────────────────────────────

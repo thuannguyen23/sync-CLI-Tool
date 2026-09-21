@@ -106,6 +106,46 @@ else
   fi
 fi
 
+# ─── OpenCode 2 (AI CLI) ────────────────────────────────────────────────────
+section "OpenCode 2"
+if has npm; then
+  if has opencode; then
+    OPENCODE_VER="$(opencode --version 2>/dev/null || echo '0.0.0')"
+    if [[ "$OPENCODE_VER" =~ ^[01]\. ]]; then
+      warn "OpenCode v1 ($OPENCODE_VER) detected — upgrading to OpenCode v2 (@opencode/cli)..."
+      npm uninstall -g opencode-ai 2>/dev/null || true
+      npm install -g @opencode/cli
+      ok "OpenCode upgraded to v2: $(opencode --version 2>/dev/null || echo 'v2')"
+    else
+      ok "OpenCode v2 found: $(which opencode) ($OPENCODE_VER)"
+    fi
+  else
+    info "Installing OpenCode v2 (@opencode/cli)..."
+    npm install -g @opencode/cli
+    ok "OpenCode v2 installed: $(opencode --version 2>/dev/null || echo 'v2')"
+  fi
+fi
+
+# ─── context-mode (OpenCode 2 fix / PR #1171) ──────────────────────────────
+section "context-mode (OpenCode 2 compatible)"
+if has npm && has git; then
+  CTX_DIR="${CONTEXT_MODE_DIR:-$HOME/.local/share/context-mode}"
+  CTX_REPO="https://github.com/Scratchydisk/context-mode.git"
+  CTX_BRANCH="fix/opencode-v2-plugin-compat"
+
+  if [ -d "$CTX_DIR/.git" ]; then
+    info "Updating context-mode in $CTX_DIR..."
+    (cd "$CTX_DIR" && git fetch origin "$CTX_BRANCH" 2>/dev/null && git checkout "$CTX_BRANCH" 2>/dev/null && git pull origin "$CTX_BRANCH" 2>/dev/null && npm install --legacy-peer-deps --silent && npm run build --silent && npm link)
+    ok "context-mode (OpenCode 2 fix) updated and linked"
+  else
+    info "Cloning and building context-mode ($CTX_BRANCH) → $CTX_DIR..."
+    mkdir -p "$(dirname "$CTX_DIR")"
+    git clone -b "$CTX_BRANCH" "$CTX_REPO" "$CTX_DIR"
+    (cd "$CTX_DIR" && npm install --legacy-peer-deps --silent && npm run build --silent && npm link)
+    ok "context-mode (OpenCode 2 fix) installed and linked"
+  fi
+fi
+
 # ─── CLI tool detection (informational — not auto-installed) ─────────────────
 section "AI CLI tools (informational)"
 for tool in agy codex opencode cursor; do

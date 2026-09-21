@@ -45,4 +45,10 @@ test('AGY IDE receives context-mode MCP server configuration', () => {
   assert.match(source, /mcpConfig\.mcpServers\['context-mode'\]/)
 })
 
+test('OpenCode configures context-mode in both plugin and plugins arrays for v1/v2 compat', () => {
+  assert.match(source, /config\.plugins/)
+  assert.match(source, /config\.plugins\.push\('context-mode'\)/)
+})
+
+
 

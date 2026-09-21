@@ -205,8 +205,7 @@ function buildCursor() {
 // ─── 3. OpenCode format (MERGE) ──────────────────────────────────────────────
 // Uses "mcp" key for v1, command is an array, env key is "environment"
 // IMPORTANT: Updates the "mcp" key; preserves everything else (provider, plugins, etc.)
-function buildOpenCode() {
-  const opencodeFile = join(HOME, ".config/opencode/opencode.json");
+function buildOpenCode(opencodeFile = join(HOME, ".config/opencode/opencode.json")) {
   let existing = {};
   if (existsSync(opencodeFile)) {
     try {
@@ -303,6 +302,7 @@ function buildOpenCode() {
     $schema: "https://opencode.ai/config.json",
     instructions,
     plugin: plugins,
+    plugins: plugins,
     mcp: {
       ...existingMcp,
       ...mcpServers,
@@ -591,7 +591,13 @@ function writeText(file, data, label) {
 
   if (!process.env.SKIP_OPENCODE) {
     try {
-      writeJson(opencodeFile, buildOpenCode(), "OpenCode ");
+      writeJson(opencodeFile, buildOpenCode(opencodeFile), "OpenCode ");
+      if (process.env.OPENCODE_CONFIG_DIR) {
+        const orcaFile = join(process.env.OPENCODE_CONFIG_DIR, "opencode.json");
+        if (orcaFile !== opencodeFile) {
+          writeJson(orcaFile, buildOpenCode(orcaFile), "OpenCode (Orca) ");
+        }
+      }
     } catch (e) {
       err(`OpenCode: ${e.message}`);
     }
