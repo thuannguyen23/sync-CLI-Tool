@@ -35,7 +35,7 @@ test('sync-mcp builds Claude Code MCP configuration and merges with ~/.claude.js
   assert.match(source, /\.claude\.json/)
 })
 
-test('sync-mcp formats OpenCode MCP servers under mcp for v1', () => {
-  assert.match(source, /mcp:\s*\{\s*\.\.\.existingMcp/)
+test('sync-mcp formats OpenCode MCP servers under mcp.servers for v2', () => {
+  assert.match(source, /servers:\s*\{\s*\.\.\.existingServers/)
 })
 
