@@ -253,9 +253,10 @@ rtk proxy <cmd>
 
 When processing large data, exploring codebases, or executing web requests:
 - Never dump raw command outputs or raw HTTP responses into conversation context.
-- Use `ctx_execute(language, code)` or `ctx_execute_file(path, language, code)` to process data inside the sandbox and log only the final summary/answer.
-- Use `ctx_batch_execute(commands, queries)` to batch-run multiple commands and auto-index results.
-- Use `ctx_fetch_and_index(url, source)` instead of raw `curl` or full HTML dumps.
+- Use `context-mode_ctx_execute(language, code)` or `context-mode_ctx_execute_file(path, language, code)` to process data inside the sandbox and log only the final summary/answer.
+- Use `context-mode_ctx_batch_execute(commands, queries)` to batch-run multiple commands and auto-index results.
+- Use `context-mode_ctx_fetch_and_index(url, source)` instead of raw `curl` or full HTML dumps.
+- Use `context-mode_ctx_search(queries)` to query indexed content.
 - Type `ctx stats` to monitor token savings across sessions.
 
 ---
@@ -263,3 +264,11 @@ When processing large data, exploring codebases, or executing web requests:
 # Math Formatting Rule
 
 Do not use LaTeX delimiters. Format mathematical formulas as plain text or code, for example `x^2` and `sqrt(x)`.
+
+---
+
+@/home/thuannguyen2/.codex/RTK.md
+
+---
+
+@RTK.md
