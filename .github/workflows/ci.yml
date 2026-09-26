@@ -5,21 +5,71 @@ on:
     branches: [ master, main ]
   pull_request:
     branches: [ master, main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  node-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [ '20.x', '22.x' ]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Use Node.js
+      - name: Use Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: ${{ matrix.node }}
 
-      - name: Run Node Tests
+      - name: Run Node tests
         run: npm test
 
-      - name: Run Bash Lifecycle Tests
-        run: npm run test:teardown
+      - name: Syntax-check sync scripts
+        run: |
+          for f in scripts/*.mjs; do node --check "$f"; done
+
+      - name: Verify generated Cursor rule is in sync
+        # setup.sh regenerates plugins/cursor/rules/agent-workflow.mdc
+        # from rules/AGENTS.md on every run — fail if the committed
+        # copy drifted instead of silently shipping a stale rule.
+        run: |
+          { echo "---"; echo "alwaysApply: true"; echo "---"; echo ""; cat rules/AGENTS.md; } > /tmp/expected-agent-workflow.mdc
+          diff /tmp/expected-agent-workflow.mdc plugins/cursor/rules/agent-workflow.mdc
+
+  shell-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Bash syntax check
+        run: |
+          bash -n setup.sh
+          bash -n teardown.sh
+          bash -n test-teardown.sh
+          bash -n scripts/prerequisites.sh
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint shell scripts
+        run: shellcheck -S warning setup.sh teardown.sh test-teardown.sh scripts/prerequisites.sh
+
+      - name: Run Bash lifecycle test (isolated HOME)
+        # test-teardown.sh touches $HOME — isolate it so the runner's
+        # real home directory is never modified.
+        run: |
+          FAKE_HOME="$(mktemp -d)"
+          HOME="$FAKE_HOME" npm run test:teardown
+          rm -rf "$FAKE_HOME"

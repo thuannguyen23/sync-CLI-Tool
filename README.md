@@ -103,7 +103,7 @@ All 7 tools share a unified behavioral contract:
 | **AGY** | `~/.gemini/config/AGENTS.md` | `~/.gemini/config/mcp_config.json` (JSON + `$typeName`) | `~/.gemini/config/skills/` (Symlink) | Prompt rule in `AGENTS.md` |
 | **Cursor** | Local Plugin (`plugins/cursor`) | `~/.cursor/mcp.json` (JSON `mcpServers`) | `~/.config/Cursor/User/skills/` (Symlink) | Pre-tool hook in `hooks.json` |
 | **Codex** | `~/.codex/AGENTS.md` | `~/.codex/config.toml` (TOML via `codex mcp add`) | `~/.codex/skills/` (Symlink) | Prompt rule in `AGENTS.md` |
-| **OpenCode** | `~/.config/opencode/AGENTS.md` | `~/.config/opencode/opencode.json` (JSON `mcp` key) | `~/.config/opencode/skills/` (Symlink & Native read) | Runtime TypeScript plugin |
+| **OpenCode** | `~/.config/opencode/AGENTS.md` | `~/.config/opencode/opencode.json` (JSON `mcp.servers` key) | `~/.config/opencode/skills/` (Symlink & Native read) | Runtime TypeScript plugin (v2 `setup` API) |
 | **Kilo** | `~/.config/kilo/AGENTS.md` | `~/.config/kilo/kilo.json` (JSON `mcp` key) | `~/.agents/skills/` (Native read) | Prompt rule in `AGENTS.md` |
 | **Cline** | `~/.cline/rules/AGENTS.md` & `~/.agents/AGENTS.md` | `cline_mcp_settings.json` (CLI & VS Code storage) | `~/.cline/skills/` (Symlink) | Prompt rule in `AGENTS.md` |
 | **Claude Code** | `~/.claude/CLAUDE.md` | `~/.claude.json` (JSON `mcpServers` merged) | `~/.claude/skills/` (Symlink) | PreToolUse Bash hook in `settings.json` |

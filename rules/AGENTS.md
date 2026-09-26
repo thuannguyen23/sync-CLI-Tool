@@ -263,8 +263,4 @@ Do not use LaTeX delimiters. Format mathematical formulas as plain text or code,
 
 ---
 
-@/home/thuannguyen2/.codex/RTK.md
-
----
-
 @RTK.md

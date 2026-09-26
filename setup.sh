@@ -20,7 +20,8 @@ set -euo pipefail
 resolve_symlink() {
   local target="$1"
   while [ -L "$target" ]; do
-    local dir="$(cd -P "$(dirname "$target")" >/dev/null 2>&1 && pwd)"
+    local dir
+    dir="$(cd -P "$(dirname "$target")" >/dev/null 2>&1 && pwd)"
     target="$(readlink "$target")"
     [[ $target != /* ]] && target="$dir/$target"
   done
@@ -118,14 +119,18 @@ ask_install "Claude Code" $claude_found || export SKIP_CLAUDE=1
 # Many tools (OpenCode, etc.) expect skills at ~/.agents/skills/
 # We create ~/.agents as a symlink → wherever this repo actually lives.
 if [ -L "$HOME_DIR/.agents" ] && [ "$(resolve_symlink "$HOME_DIR/.agents")" = "$AGENTS_DIR" ]; then
+    # shellcheck disable=SC2088 # "~/.agents" is intentional display text, not a path
   info "~/.agents → $AGENTS_DIR (already correct)"
 elif [ -e "$HOME_DIR/.agents" ] && [ ! -L "$HOME_DIR/.agents" ]; then
+    # shellcheck disable=SC2088 # "~/.agents" is intentional display text, not a path
   warn "~/.agents exists as a real directory — backing up to ~/.agents.bak"
   mv "$HOME_DIR/.agents" "$HOME_DIR/.agents.bak"
   ln -sfn "$AGENTS_DIR" "$HOME_DIR/.agents"
+    # shellcheck disable=SC2088 # "~/.agents" is intentional display text, not a path
   ok "~/.agents → $AGENTS_DIR (old dir backed up)"
 else
   ln -sfn "$AGENTS_DIR" "$HOME_DIR/.agents"
+    # shellcheck disable=SC2088 # "~/.agents" is intentional display text, not a path
   ok "~/.agents → $AGENTS_DIR"
 fi
 
@@ -136,6 +141,9 @@ set +e
 source "$AGENTS_DIR/scripts/prerequisites.sh"
 PREREQ_EXIT=$?
 set -e
+if [ "$PREREQ_EXIT" -ne 0 ]; then
+  warn "Some prerequisites failed (exit $PREREQ_EXIT) — continuing with available tools"
+fi
 
 # ─── Step 2: Secrets ─────────────────────────────────────────────────────────
 section "2 / 7  Secrets"

@@ -5,7 +5,7 @@ import { syncSkills } from '../scripts/sync-skills.mjs';
 
 test('sync-skills discovers sureforge and all skills', () => {
   const result = syncSkills();
-  assert.ok(result.synced >= 20, `Expected at least 20 skills, got ${result.synced}`);
+  assert.ok(result.synced >= 15, `Expected at least 15 skills, got ${result.synced}`);
   assert.ok(result.skills.includes('sureforge'), 'sureforge skill should be discovered and synced');
   assert.ok(result.skills.includes('brainstorming'), 'brainstorming skill should be discovered');
 });

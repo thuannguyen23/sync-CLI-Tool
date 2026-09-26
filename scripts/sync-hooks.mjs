@@ -368,9 +368,11 @@ function syncOpenCode() {
   let config
   try {
     const raw = readFileSync(configPath, 'utf8')
-    // Handle trailing commas and control characters (same as sync-mcp.mjs)
+    // Handle trailing commas, comments, and control characters (same as sync-mcp.mjs)
     const cleaned = raw
       .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/,(\s*[}\]])/g, '$1')
     config = JSON.parse(cleaned)
   } catch (e) {
@@ -379,20 +381,18 @@ function syncOpenCode() {
   }
 
   let changed = false
-  if (!config.plugin) config.plugin = []
-
-  // Ensure "context-mode" is in the plugin array.
-  // OpenCode manages context-mode hooks internally through its TypeScript plugin
-  // system (tool.execute.before, tool.execute.after, etc.).
-  // WARNING: Do NOT add context-mode to the "mcp" section — OpenCode will fail
-  // to register ctx_* tools if context-mode exists in both plugin AND mcp.
-  if (!config.plugin.includes('context-mode')) {
-    config.plugin.push('context-mode')
+  // Tạm thời loại bỏ context-mode cho OpenCode v2 để tránh lỗi schema loading
+  if (Array.isArray(config.plugin) && config.plugin.includes('context-mode')) {
+    config.plugin = config.plugin.filter((p) => p !== 'context-mode')
+    changed = true
+  }
+  if (Array.isArray(config.plugins) && config.plugins.includes('context-mode')) {
+    config.plugins = config.plugins.filter((p) => p !== 'context-mode')
     changed = true
   }
 
   if (changed) writeJSON(configPath, config)
-  ok(`OpenCode plugin array ${changed ? '(added context-mode)' : '(up to date)'}`)
+  ok(`OpenCode plugin array ${changed ? '(cleaned context-mode for v2)' : '(up to date)'}`)
 }
 
 // ─── 5. Kilo CLI ────────────────────────────────────────────────────────────

@@ -202,9 +202,9 @@ function buildCursor() {
   return { mcpServers };
 }
 
-// ─── 3. OpenCode format (MERGE) ──────────────────────────────────────────────
-// Uses "mcp" key for v1, command is an array, env key is "environment"
-// IMPORTANT: Updates the "mcp" key; preserves everything else (provider, plugins, etc.)
+// ─── 3. OpenCode format (MERGE for v2) ───────────────────────────────────────
+// Uses "mcp.servers" key for v2, command is an array, env key is "environment"
+// IMPORTANT: Updates the "mcp.servers" key; preserves everything else (provider, plugins, etc.)
 function buildOpenCode() {
   const opencodeFile = join(HOME, ".config/opencode/opencode.json");
   let existing = {};
@@ -217,6 +217,8 @@ function buildOpenCode() {
       // NOTE: Do NOT strip // "comments" — would corrupt https:// URLs in strings!
       const cleaned = raw
         .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, "") // strip real ctrl chars (not \n \r)
+        .replace(/^\s*\/\/.*$/gm, "") // safely strip line comments
+        .replace(/\/\*[\s\S]*?\*\//g, "") // strip block comments
         .replace(/,(\s*[}\]])/g, "$1"); // remove trailing commas
       existing = JSON.parse(cleaned);
     } catch (e) {
@@ -263,6 +265,8 @@ function buildOpenCode() {
   // Update plugin path for rtk.ts to use current HOME
   const pluginRtkPath = join(HOME, ".config/opencode/plugins/rtk.ts");
   let plugins = existing.plugins ?? existing.plugin ?? [];
+  // Exclude context-mode temporarily to prevent v2 loading errors until upstream PR #1171 is released
+  plugins = plugins.filter((p) => p !== "context-mode");
   plugins = plugins.map((p) =>
     typeof p === "string" && p.includes("plugins/rtk.ts") ? pluginRtkPath : p,
   );
@@ -293,20 +297,24 @@ function buildOpenCode() {
     instructions = [agentsMdPath, ...instructions];
   }
 
-  const existingMcp =
-    typeof existing.mcp === "object" && !existing.mcp?.servers
-      ? existing.mcp
-      : {};
+  const existingServers = existing.mcp?.servers ?? existing.mcp ?? {};
+  delete existingServers.servers;
+  delete existingServers["test-mcp"];
+
+  const mcp = {
+    servers: {
+      ...existingServers,
+      ...mcpServers,
+    },
+  };
 
   return {
     ...existing,
-    $schema: "https://opencode.ai/config.json",
+    $schema: "https://opencode.ai/v2/config.json",
     instructions,
+    plugins,
     plugin: plugins,
-    mcp: {
-      ...existingMcp,
-      ...mcpServers,
-    },
+    mcp,
     permission,
   };
 }

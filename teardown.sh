@@ -9,7 +9,8 @@ HOME_DIR="$HOME"
 get_script_dir() {
   local source="${BASH_SOURCE[0]}"
   while [ -L "$source" ]; do
-    local dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
+    local dir
+    dir="$(cd -P "$(dirname "$source")" >/dev/null 2>&1 && pwd)"
     source="$(readlink "$source")"
     [[ $source != /* ]] && source="$dir/$source"
   done
