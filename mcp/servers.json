@@ -75,12 +75,17 @@
       "requires": ["uvx"],
       "description": "MySQL MCP — Local Forbes database"
     },
-    "obsidian": {
-      "url": "${OBSIDIAN_URL}",
-      "headers": {
-        "Authorization": "Bearer ${OBSIDIAN_AUTH_TOKEN}"
-      },
-      "description": "Obsidian vault integration via HTTP/SSE"
+    "obsidian-vault": {
+      "command": [
+        "npx",
+        "-y",
+        "obsidian-mcp",
+        "serve",
+        "--vault",
+        "main=${OBSIDIAN_VAULT_PATH}"
+      ],
+      "requires": ["npx"],
+      "description": "Obsidian Vault MCP server for notes, search, and tags"
     },
     "github": {
       "command": ["npx", "-y", "@modelcontextprotocol/server-github"],

@@ -43,7 +43,10 @@ if (existsSync(SECRETS_FILE)) {
       const eqIdx = line.indexOf("=");
       if (eqIdx === -1) return;
       const key = line.slice(0, eqIdx).trim();
-      const val = line.slice(eqIdx + 1).trim();
+      let val = line.slice(eqIdx + 1).trim();
+      if (val.startsWith("~/")) {
+        val = join(HOME, val.slice(2));
+      }
       secrets[key] = val;
     });
 } else {
@@ -300,6 +303,7 @@ function buildOpenCode() {
   const existingServers = existing.mcp?.servers ?? existing.mcp ?? {};
   delete existingServers.servers;
   delete existingServers["test-mcp"];
+  delete existingServers.obsidian;
 
   const mcp = {
     servers: {
@@ -571,6 +575,8 @@ function writeText(file, data, label) {
   const agyFileIde = join(HOME, ".gemini/antigravity-ide/mcp_config.json");
   const agyFileApp = join(HOME, ".gemini/antigravity/mcp_config.json");
   const cursorFile = join(HOME, ".cursor/mcp.json");
+  const vscodeMcpFile = join(HOME, ".config/Code/User/mcp.json");
+  const agyIdeUserMcpFile = join(HOME, ".config/Antigravity IDE/User/mcp.json");
   const opencodeFile = join(HOME, ".config/opencode/opencode.json");
 
   if (!process.env.SKIP_AGY) {
@@ -589,9 +595,16 @@ function writeText(file, data, label) {
 
   if (!process.env.SKIP_CURSOR) {
     try {
-      writeJson(cursorFile, buildCursor(), "Cursor   ");
+      const cursorData = buildCursor();
+      writeJson(cursorFile, cursorData, "Cursor   ");
+      if (existsSync(dirname(vscodeMcpFile))) {
+        writeJson(vscodeMcpFile, cursorData, "VS Code (User)  ");
+      }
+      if (existsSync(dirname(agyIdeUserMcpFile))) {
+        writeJson(agyIdeUserMcpFile, cursorData, "Antigravity IDE (User)");
+      }
     } catch (e) {
-      err(`Cursor: ${e.message}`);
+      err(`Cursor / VS Code / Antigravity IDE: ${e.message}`);
     }
   } else {
     info("Cursor    → skipped (user opted out)");
