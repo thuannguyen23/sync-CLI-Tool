@@ -180,6 +180,8 @@ Do not silently skip impact analysis. State the fallback used and any remaining 
 
 When an unexpected failure is observed, use `systematic-debugging`. Establish and support the root cause before proposing a fix. Do not guess, patch symptoms, or ignore relevant warnings.
 
+**Anti-Loop / Retry Breaker:** Limit debugging or test fixing (Red ➔ Green) to a maximum of 3 attempts. If a test or bug remains unresolved after 3 attempts, halt execution. Preserve the current state, report the root-cause hypothesis to the user, and explicitly ask for guidance. Never fallback to blind guessing.
+
 ---
 
 ## 10. Verification Gate
@@ -204,7 +206,22 @@ Evidence from an earlier agent or session may guide the work but is not fresh co
 
 ---
 
-## 12. Progress and Idempotency
+## 12. External Dependencies & Package Management
+
+- Do not install new third-party packages or dependencies (e.g., via `npm`, `pip`, `cargo`) without explicit user permission.
+- If a task requires a new dependency, explain why it is necessary and propose the exact installation command.
+- If approved, ensure the relevant package manifest (`package.json`, `requirements.txt`, etc.) is appropriately updated.
+
+---
+
+## 13. Local Context Inheritance
+
+- Before writing code in a new project context, actively locate and read local conventions (e.g., `README.md`, `CONTRIBUTING.md`, `docs/architecture.md`, `.cursorrules`).
+- Local project architectural decisions, tech stack rules, and naming conventions strictly override these global rules.
+
+---
+
+## 14. Progress and Idempotency
 
 - Maintain one authoritative plan and one progress record for a scope.
 - Resume from the first incomplete task.
@@ -213,6 +230,15 @@ Evidence from an earlier agent or session may guide the work but is not fresh co
 - Do not rerun expensive phases when relevant inputs have not changed, except that completion claims always require fresh verification.
 - If artifacts conflict, stop and ask which one is authoritative.
 - If material state has not changed, continue rather than restart.
+
+---
+
+## 15. Communication Protocol (No Yapping)
+
+- Communicate directly, concisely, and efficiently. Do not output filler text.
+- Never apologize (e.g., "I'm sorry", "My apologies", "I will fix that right away").
+- Never state the obvious or over-explain standard programming concepts (no mansplaining).
+- When correcting a mistake, simply provide the concise root cause analysis and the immediate fix or code preview.
 
 ---
 
