@@ -62,9 +62,9 @@ All skills follow the open **Agent Skills Specification** (`SKILL.md`) and are s
 
 #### Architecture, Planning & Execution
 - **`brainstorming`**: Interactive exploration of requirements, UX design, and architectural trade-offs prior to coding.
-- **`writing-plans`**: Crafts bite-sized (2-5 min), zero-placeholder TDD implementation plans.
-- **`executing-plans`**: Executes structured plans sequentially with explicit reviewer checkpoints.
-- **`subagent-driven-development`**: Dispatches independent subagents per bite-sized task with two-stage verification.
+- **`writing-plans`**: Creates scoped implementation plans with concrete tasks, acceptance criteria, and verification steps.
+- **`executing-plans`**: Executes eligible plans inline, with task-level verification and a final independent review.
+- **`subagent-driven-development`**: Executes eligible independent tasks through subagents, with task reviews and a final whole-branch review.
 - **`loop-engineering`**: Continuous runtime evaluation, interactive grill sessions, and automated monitors.
 
 #### Agent Coordination & Concurrency
@@ -81,18 +81,23 @@ All skills follow the open **Agent Skills Specification** (`SKILL.md`) and are s
 - **`computer-use`**: Local operating system and GUI automation via accessibility tree and window controls.
 - **`orca-cli`**: Controls Orca-managed worktrees, folder contexts, and embedded agent browsers.
 - **`using-superpowers`**: Central dispatcher that activates relevant skills before performing actions.
+- **`diagnosing-superpowers`**: Investigates repeated work, ignored plans, unexpected costs, and other agent workflow failures using session evidence.
 - **`find-skills`** & **`writing-skills`**: Utilities for discovering, authoring, and validating new agent skills.
 
 ---
 
 ### 3. Canonical Safety & Workflow Rules (`rules/AGENTS.md`)
 
-All 7 tools share a unified behavioral contract:
-- **SureForge Quality Discipline:** Advance on evidence only (`READY`, `REPAIR`, `BLOCKED`).
-- **Codegraph Impact Gate:** Mandatory call graph and blast-radius analysis before touching shared APIs or symbols.
-- **Mandatory Code Preview Gate:** Agents must present a complete diff preview and receive user confirmation before editing files.
-- **Absolute Git Prohibition:** Autonomously executing `git commit`, `git push`, or destructive commands without explicit prompt permission is strictly forbidden.
-- **Token Optimization:** Mandatory usage of RTK command prefixes.
+The shared policy is written in English for users across projects and supported clients. Project-specific services, environments, and implementation conventions belong in local project instructions.
+
+- **Workflow Routing:** Distinguishes questions, investigations, design, implementation, debugging, and review. Approved plans resume from their first incomplete task.
+- **Skill Routing:** Maps all 22 installed skills to concrete triggers. Agents read the selected skill and respect its prerequisites; upstream skills remain unchanged unless explicitly authorized.
+- **MCP Routing:** Defines when to use CodeGraph, Context7, web search, GitHub, browser automation, and sequential thinking, plus context-mode where available. Agents discover actual tool schemas instead of assuming client-specific namespaces.
+- **Codegraph Impact Gate:** Uses indexed code relationships for exploration and shared-contract impact analysis, with explicit fallbacks for absent or stale indexes. Index creation requires authorization.
+- **Mandatory Code Preview Gate:** Requires a concrete preview and explicit approval before applying edits. Approval remains bounded by the reviewed scope.
+- **Permissions:** Git mutations, dependency installation, delegation, and external writes remain subject to explicit user and host authorization.
+- **Verification and Repair Limits:** Requires evidence for completion claims, independent review where required, and bounded repair attempts. Passing static checks is not a model-compliance or performance benchmark.
+- **Context Protection:** Uses focused retrieval, context-mode, local processing, and RTK where appropriate while preserving exact diagnostic evidence and providing fallbacks when tools are unavailable.
 
 ---
 

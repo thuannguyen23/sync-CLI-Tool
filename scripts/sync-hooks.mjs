@@ -21,7 +21,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, existsSync,
-  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync
+  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync
 } from 'fs'
 import { join, dirname } from 'path'
 import { execSync } from 'child_process'
@@ -160,13 +160,25 @@ function ensureCursorHook(hooks, event, entry, identifier) {
  * Format: hooks[Event] = [{ hooks: [{ type, command, timeout? }], matcher? }]
  * Same structure as AGY but with different event names and optional fields.
  */
-function ensureCodexHook(hooks, event, entry, identifier) {
+function ensureCodexHook(hooks, event, entry, identifier, replaceExisting = false) {
   if (!hooks[event]) hooks[event] = []
   const exists = hooks[event].some(group =>
     (group.hooks || []).some(h => (h.command || '').includes(identifier))
   )
   if (!exists) { hooks[event].push(entry); return true }
-  return false
+  if (!replaceExisting) return false
+
+  // Refresh only the managed hook; retain other commands even in a shared group.
+  const updated = hooks[event].flatMap(group => {
+    const remaining = (group.hooks || []).filter(h =>
+      !(h.command || '').includes(identifier))
+    if (remaining.length === (group.hooks || []).length) return [group]
+    return remaining.length ? [{ ...group, hooks: remaining }] : []
+  })
+  updated.push(entry)
+  if (JSON.stringify(updated) === JSON.stringify(hooks[event])) return false
+  hooks[event] = updated
+  return true
 }
 
 // ─── 1. Cursor CLI ──────────────────────────────────────────────────────────
@@ -342,7 +354,8 @@ function syncAgy(ctxPkgDir) {
 // ─── 3. Codex CLI ───────────────────────────────────────────────────────────
 
 function syncCodex() {
-  const hooksPath = join(HOME, '.codex', 'hooks.json')
+  const codexHome = process.env.CODEX_HOME || join(HOME, '.codex')
+  const hooksPath = join(codexHome, 'hooks.json')
   const config = readJSON(hooksPath) || { hooks: {} }
   if (!config.hooks) config.hooks = {}
   const hooks = config.hooks
@@ -368,23 +381,24 @@ function syncCodex() {
   // RTK: sync rtk_pre_tool_use.py hook script and register PreToolUse hook for Bash
   if (hasCmd('rtk')) {
     const codexHookSrc = join(dirname(new URL(import.meta.url).pathname), '..', 'hooks', 'codex', 'rtk_pre_tool_use.py')
-    const codexHooksDir = join(HOME, '.codex', 'hooks')
+    const codexHooksDir = join(codexHome, 'hooks')
     const codexHookDst = join(codexHooksDir, 'rtk_pre_tool_use.py')
     if (existsSync(codexHookSrc)) {
       mkdirSync(codexHooksDir, { recursive: true })
+      backupIfNeeded(codexHookDst)
       cpSync(codexHookSrc, codexHookDst, { force: true })
-      try { execSync(`chmod +x "${codexHookDst}"`) } catch {}
+      chmodSync(codexHookDst, 0o755)
     }
 
     changed |= ensureCodexHook(hooks, 'PreToolUse', {
       hooks: [{
-        command: `python3 ${codexHookDst}`,
+        command: `python3 '${codexHookDst.replace(/'/g, "'\\''")}'`,
         statusMessage: 'RTK rewrite',
         timeout: 10,
         type: 'command'
       }],
       matcher: '^Bash$'
-    }, 'rtk_pre_tool_use.py')
+    }, 'rtk_pre_tool_use.py', true)
   }
 
   if (changed) writeJSON(hooksPath, config)
@@ -424,7 +438,7 @@ function syncOpenCode() {
   }
 
   let changed = false
-  // Tạm thời loại bỏ context-mode cho OpenCode v2 để tránh lỗi schema loading
+  // Temporarily remove context-mode from OpenCode v2 to avoid schema-loading errors.
   if (Array.isArray(config.plugin) && config.plugin.includes('context-mode')) {
     config.plugin = config.plugin.filter((p) => p !== 'context-mode')
     changed = true
