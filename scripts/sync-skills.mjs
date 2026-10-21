@@ -7,6 +7,7 @@
  *   - AGY IDE:     ~/.gemini/antigravity-ide/skills/
  *   - AGY 2.0:     ~/.gemini/antigravity/skills/
  *   - Codex:       ~/.codex/skills/
+ *   - Codex profile: $CODEX_HOME/skills/ (when configured separately)
  *   - Cursor:      ~/.config/Cursor/User/skills
  *   - Claude Code: ~/.claude/skills/
  *   - Cline:       ~/.cline/skills/
@@ -70,6 +71,9 @@ export function syncSkills() {
     { name: 'AGY IDE', path: join(HOME, '.gemini', 'antigravity-ide', 'skills') },
     { name: 'AGY 2.0', path: join(HOME, '.gemini', 'antigravity', 'skills') },
     { name: 'Codex', path: join(HOME, '.codex', 'skills') },
+    ...(process.env.CODEX_HOME && resolve(process.env.CODEX_HOME) !== join(HOME, '.codex')
+      ? [{ name: 'Codex active profile', path: join(resolve(process.env.CODEX_HOME), 'skills') }]
+      : []),
     { name: 'Claude Code', path: join(HOME, '.claude', 'skills') },
     { name: 'Cline', path: join(HOME, '.cline', 'skills') },
     { name: 'OpenCode', path: join(HOME, '.config', 'opencode', 'skills') },
