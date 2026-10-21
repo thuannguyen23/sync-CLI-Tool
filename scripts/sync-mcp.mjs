@@ -537,7 +537,9 @@ function buildClaudeCode() {
     };
   }
 
-  return { ...existing, mcpServers };
+  // Merge: preserve manually-added servers (e.g. Exa HTTP),
+  // source-of-truth entries win on conflict.
+  return { ...existing, mcpServers: { ...(existing.mcpServers ?? {}), ...mcpServers } };
 }
 
 // ─── Write helpers ────────────────────────────────────────────────────────────
