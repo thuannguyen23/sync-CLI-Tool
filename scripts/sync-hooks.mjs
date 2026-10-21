@@ -188,6 +188,14 @@ function syncCursor(ctxPkgDir) {
     }, 'herdr')
   }
 
+  // RTK hook (preToolUse)
+  if (hasCmd('rtk')) {
+    hooksChanged |= ensureCursorHook(hooks, 'preToolUse', {
+      command: 'rtk hook cursor',
+      matcher: 'Shell'
+    }, 'rtk hook cursor')
+  }
+
   // Context-mode hooks (preToolUse, postToolUse, stop)
   if (hasCmd('context-mode')) {
     hooksChanged |= ensureCursorHook(hooks, 'preToolUse', {
@@ -254,6 +262,21 @@ function syncCursor(ctxPkgDir) {
 // ─── 2. AGY CLI (Antigravity) ───────────────────────────────────────────────
 
 function syncAgy(ctxPkgDir) {
+  // ── 2a. RTK Plugin for AGY ──
+  if (hasCmd('rtk')) {
+    const rtkPluginSrc = join(dirname(new URL(import.meta.url).pathname), '..', 'plugins', 'antigravity', 'rtk')
+    if (existsSync(join(rtkPluginSrc, 'plugin.json'))) {
+      const rtkDstGlobal = join(HOME, '.gemini', 'config', 'plugins', 'rtk')
+      const rtkDstCli    = join(HOME, '.gemini', 'antigravity-cli', 'plugins', 'rtk')
+      const rtkDstIde    = join(HOME, '.gemini', 'antigravity-ide', 'plugins', 'rtk')
+
+      cpSync(rtkPluginSrc, rtkDstGlobal, { recursive: true, force: true })
+      cpSync(rtkPluginSrc, rtkDstCli,    { recursive: true, force: true })
+      cpSync(rtkPluginSrc, rtkDstIde,    { recursive: true, force: true })
+      ok('AGY      RTK plugin installed (Global, CLI, IDE)')
+    }
+  }
+
   if (!hasCmd('context-mode') || !ctxPkgDir) {
     info('AGY      context-mode package not available — skipping')
     return
@@ -342,7 +365,27 @@ function syncCodex() {
   // .codex-plugin/hooks.json inside the plugin cache, not the global hooks.json.
   // See: codex plugin marketplace add mksglu/context-mode
 
-  // RTK: handled by rtk init -g --codex (creates RTK.md), no hooks needed.
+  // RTK: sync rtk_pre_tool_use.py hook script and register PreToolUse hook for Bash
+  if (hasCmd('rtk')) {
+    const codexHookSrc = join(dirname(new URL(import.meta.url).pathname), '..', 'hooks', 'codex', 'rtk_pre_tool_use.py')
+    const codexHooksDir = join(HOME, '.codex', 'hooks')
+    const codexHookDst = join(codexHooksDir, 'rtk_pre_tool_use.py')
+    if (existsSync(codexHookSrc)) {
+      mkdirSync(codexHooksDir, { recursive: true })
+      cpSync(codexHookSrc, codexHookDst, { force: true })
+      try { execSync(`chmod +x "${codexHookDst}"`) } catch {}
+    }
+
+    changed |= ensureCodexHook(hooks, 'PreToolUse', {
+      hooks: [{
+        command: `python3 ${codexHookDst}`,
+        statusMessage: 'RTK rewrite',
+        timeout: 10,
+        type: 'command'
+      }],
+      matcher: '^Bash$'
+    }, 'rtk_pre_tool_use.py')
+  }
 
   if (changed) writeJSON(hooksPath, config)
 

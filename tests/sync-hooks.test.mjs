@@ -45,4 +45,12 @@ test('AGY IDE receives context-mode MCP server configuration', () => {
   assert.match(source, /mcpConfig\.mcpServers\['context-mode'\]/)
 })
 
+test('sync-hooks configures RTK hooks for Cursor, AGY, and Codex', () => {
+  assert.match(source, /rtk hook cursor/)
+  assert.match(source, /plugins', 'antigravity', 'rtk/)
+  assert.match(source, /\.gemini', 'config', 'plugins', 'rtk/)
+  assert.match(source, /rtk_pre_tool_use\.py/)
+  assert.match(source, /\.codex', 'hooks'/)
+})
+
 
