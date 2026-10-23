@@ -2,9 +2,10 @@
 // Compatible with OpenCode v2 (setup API) and v1 (legacy server export).
 // Requires: rtk in PATH.
 
+import { spawnSync } from "node:child_process"
+
 function rewriteWithRtk(command: string): string {
   try {
-    const { spawnSync } = require("node:child_process")
     const res = spawnSync("rtk", ["rewrite", command], {
       encoding: "utf8",
       stdio: ["pipe", "pipe", "ignore"],
@@ -49,7 +50,7 @@ export default {
       await ctx.tool.hook("execute.before", async (event: any) => {
         const tool = String(event?.tool ?? "").toLowerCase()
         if (tool !== "bash" && tool !== "shell") return
-        const args = event?.args
+        const args = event?.input
         if (!args || typeof args !== "object") return
 
         const command = args.command

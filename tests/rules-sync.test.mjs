@@ -5,16 +5,8 @@ import { test } from "node:test";
 const read = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("setup installs the canonical global policy for all CLI agents", () => {
-  const setup = read("setup.sh");
-
-  assert.match(setup, /\.gemini\/config\/AGENTS\.md/);
-  assert.match(setup, /\.codex\/AGENTS\.md/);
-  assert.match(setup, /\.config\/opencode\/AGENTS\.md/);
-  assert.match(setup, /\.config\/kilo\/AGENTS\.md/);
-  assert.match(setup, /\.cursor\/plugins\/local\/sync-cli-tool/);
-  assert.match(setup, /\.claude\/CLAUDE\.md/);
-  assert.match(setup, /\.cline\/rules\/AGENTS\.md/);
+test("setup delegates the selected agent rules to the shared sync script", () => {
+  assert.match(read("setup.sh"), /node "\$AGENTS_DIR\/scripts\/sync-rules\.mjs"/);
 });
 
 test("Cursor adapter is an always-applied rule in a local plugin", () => {
@@ -59,7 +51,7 @@ test("sync-rules.mjs distributes AGENTS.md and CLAUDE.md to all agent environmen
   assert.match(script, /AGENTS\.md/);
   assert.match(script, /CLAUDE\.md/);
   assert.match(script, /\.gemini.*AGENTS\.md/);
-  assert.match(script, /\.codex.*AGENTS\.md/);
+  // Codex paths and CODEX_HOME are covered by the isolated behavior regressions.
   assert.match(script, /\.config.*opencode.*AGENTS\.md/);
   assert.match(script, /\.claude.*CLAUDE\.md/);
   assert.match(script, /\.cline.*rules.*AGENTS\.md/);

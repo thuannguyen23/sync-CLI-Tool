@@ -64,6 +64,8 @@ function codexFixture(t, customHome) {
   mkdirSync(codexHome, { recursive: true })
   mkdirSync(bin, { recursive: true })
   writeFileSync(join(bin, 'rtk'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  // These fixtures exercise RTK alone; do not discover packages on the host.
+  writeFileSync(join(bin, 'npm'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
   const env = {
     ...process.env,
     HOME: home,

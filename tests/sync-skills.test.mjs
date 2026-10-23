@@ -4,13 +4,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
-import { syncSkills } from '../scripts/sync-skills.mjs';
 
-test('sync-skills discovers sureforge and all skills', () => {
-  const result = syncSkills();
-  assert.ok(result.synced >= 15, `Expected at least 15 skills, got ${result.synced}`);
-  assert.ok(result.skills.includes('sureforge'), 'sureforge skill should be discovered and synced');
-  assert.ok(result.skills.includes('brainstorming'), 'brainstorming skill should be discovered');
+test('sync-skills discovers skills in an isolated home', (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'skill-discovery-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const script = new URL('../scripts/sync-skills.mjs', import.meta.url).href;
+  const code = `import { syncSkills } from ${JSON.stringify(script)}; console.log(JSON.stringify(syncSkills()));`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], {
+    cwd: new URL('..', import.meta.url).pathname,
+    env: { ...process.env, HOME: home, CODEX_HOME: join(home, 'codex-profile') },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const synced = JSON.parse(result.stdout.trim().split('\n').at(-1));
+  assert.ok(synced.synced >= 15);
+  assert.ok(synced.skills.includes('sureforge'));
+  assert.ok(synced.skills.includes('brainstorming'));
 });
 
 test('package.json sync script includes sync-skills.mjs', () => {

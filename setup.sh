@@ -160,37 +160,9 @@ fi
 section "3 / 7  Skills (symlinks)"
 SKILLS_SRC="$AGENTS_DIR/skills"
 
-# AGY CLI & IDE: symlink individual user skills INTO ~/.gemini/*/skills/
-# (Do NOT replace whole dir — AGY has 100+ built-in skills there)
-if [ -z "${SKIP_AGY:-}" ]; then
-  mkdir -p "$HOME_DIR/.gemini/config/skills"
-  mkdir -p "$HOME_DIR/.gemini/antigravity-cli/skills"
-  mkdir -p "$HOME_DIR/.gemini/antigravity-ide/skills"
-  mkdir -p "$HOME_DIR/.gemini/antigravity/skills"
-  for skill_dir in "$SKILLS_SRC"/*/; do
-    skill_name="$(basename "$skill_dir")"
-
-    target_global="$HOME_DIR/.gemini/config/skills/$skill_name"
-    if [ ! -e "$target_global" ]; then ln -sfn "$skill_dir" "$target_global"; fi
-
-    target_cli="$HOME_DIR/.gemini/antigravity-cli/skills/$skill_name"
-    if [ ! -e "$target_cli" ]; then ln -sfn "$skill_dir" "$target_cli"; fi
-
-    target_ide="$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name"
-    if [ ! -e "$target_ide" ]; then ln -sfn "$skill_dir" "$target_ide"; fi
-
-    target_agy2="$HOME_DIR/.gemini/antigravity/skills/$skill_name"
-    if [ ! -e "$target_agy2" ]; then ln -sfn "$skill_dir" "$target_agy2"; fi
-
-    ok "AGY skill linked (Global, CLI, IDE, 2.0): $skill_name"
-  done
-  find "$HOME_DIR/.gemini/config/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
-  find "$HOME_DIR/.gemini/antigravity-cli/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
-  find "$HOME_DIR/.gemini/antigravity-ide/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
-  find "$HOME_DIR/.gemini/antigravity/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
-else
-  info "AGY skills sync skipped."
-fi
+# Use the same selected-agent sync code as npm run sync.
+SKIP_CURSOR=1 SKIP_KILO=1 SKIP_CLINE=1 SKIP_CLAUDE=1 \
+  node "$AGENTS_DIR/scripts/sync-skills.mjs"
 
 # Cursor: ~/.config/Cursor/User/skills → ~/.agents/skills
 if [ -z "${SKIP_CURSOR:-}" ]; then
@@ -209,28 +181,6 @@ if [ -z "${SKIP_CURSOR:-}" ]; then
 else
   info "Cursor skills sync skipped."
 fi
-
-# Codex: ~/.codex/skills contents → symlink individual skills
-# (Codex reads ~/.agents/skills natively if configured, but symlink is safer)
-if [ -z "${SKIP_CODEX:-}" ]; then
-  mkdir -p "$HOME_DIR/.codex/skills"
-  for skill_dir in "$SKILLS_SRC"/*/; do
-    skill_name="$(basename "$skill_dir")"
-    target="$HOME_DIR/.codex/skills/$skill_name"
-    if [ ! -e "$target" ]; then
-      ln -sfn "$skill_dir" "$target"
-      ok "Codex skill: $skill_name"
-    else
-      info "Codex skill already exists: $skill_name"
-    fi
-  done
-  find "$HOME_DIR/.codex/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
-else
-  info "Codex skills sync skipped."
-fi
-
-# OpenCode reads ~/.agents/skills natively (Agent Skills spec)
-ok "OpenCode skills: reads ~/.agents/skills natively (no symlink needed)"
 
 # Kilo reads ~/.agents/skills natively (Agent Skills spec), same as OpenCode
 if [ -z "${SKIP_KILO:-}" ]; then
@@ -271,45 +221,15 @@ fi
 section "4 / 7  AGENTS.md (global instructions)"
 AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
 
-# AGY
-if [ -z "${SKIP_AGY:-}" ]; then
-  mkdir -p "$HOME_DIR/.gemini/config"
-  mkdir -p "$HOME_DIR/.gemini/antigravity-cli"
-  mkdir -p "$HOME_DIR/.gemini/antigravity-ide"
-  mkdir -p "$HOME_DIR/.gemini/antigravity"
-
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/config/AGENTS.md"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.gemini/antigravity/AGENTS.md"
-
-  # Clean up any legacy standalone symlinks in rules/ subdirectories
-  rm -f "$HOME_DIR/.gemini/config/rules/antigravity-code-review.md" 2>/dev/null || true
-  rm -f "$HOME_DIR/.gemini/antigravity-cli/rules/antigravity-code-review.md" 2>/dev/null || true
-  rm -f "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.md" 2>/dev/null || true
-
-  ok "AGY AGENTS.md → $AGENTS_MD (Unified Standard)"
-fi
-
-# OpenCode
-if [ -z "${SKIP_OPENCODE:-}" ]; then
-  mkdir -p "$HOME_DIR/.config/opencode"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/opencode/AGENTS.md"
-  ok "OpenCode AGENTS.md → $AGENTS_MD"
-fi
+# Preserve personal rules and respect CODEX_HOME using the shared adapter.
+SKIP_KILO=1 SKIP_CLINE=1 SKIP_CLAUDE=1 \
+  node "$AGENTS_DIR/scripts/sync-rules.mjs"
 
 # Kilo
 if [ -z "${SKIP_KILO:-}" ]; then
   mkdir -p "$HOME_DIR/.config/kilo"
   ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/kilo/AGENTS.md"
   ok "Kilo AGENTS.md → $AGENTS_MD"
-fi
-
-# Codex
-if [ -z "${SKIP_CODEX:-}" ]; then
-  mkdir -p "$HOME_DIR/.codex"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.codex/AGENTS.md"
-  ok "Codex AGENTS.md → $AGENTS_MD (Unified Standard)"
 fi
 
 # Cursor: file-backed global rules are distributed as a local plugin.
@@ -390,15 +310,7 @@ if has rtk; then
     ok "RTK → AGY (integrated in AGENTS.md)"
   fi
 
-  # OpenCode: symlink rtk.ts plugin from repo (NOT rtk init, to preserve
-  # the version-controlled plugin in sync-CLI-Tool/plugins/opencode/rtk.ts)
-  if [ -z "${SKIP_OPENCODE:-}" ]; then
-    RTK_SRC="$AGENTS_DIR/plugins/opencode/rtk.ts"
-    RTK_DST="$HOME_DIR/.config/opencode/plugins/rtk.ts"
-    mkdir -p "$(dirname "$RTK_DST")"
-    ln -sfn "$RTK_SRC" "$RTK_DST"
-    ok "RTK → OpenCode (plugin symlink)"
-  fi
+  # OpenCode RTK installation is handled by sync-hooks.mjs in Step 7.
 
   # Kilo: RTK is already in AGENTS.md (clean up any duplicate RTK.md)
   if [ -z "${SKIP_KILO:-}" ]; then

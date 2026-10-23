@@ -16,6 +16,8 @@ import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
+import { backupFile, codexHome, openCodeConfigPath, readConfig } from './config-utils.mjs';
+
 const HOME = homedir();
 const AGENTS_DIR = join(HOME, ".agents");
 const SECRETS_FILE = join(AGENTS_DIR, "secrets.env");
@@ -29,7 +31,7 @@ const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
 const ok = (msg) => console.log(`${GREEN}✅ ${msg}${RESET}`);
 const warn = (msg) => console.log(`${YELLOW}⚠️  ${msg}${RESET}`);
-const err = (msg) => console.log(`${RED}❌ ${msg}${RESET}`);
+const err = (msg) => { process.exitCode = 1; console.error(`${RED}❌ ${msg}${RESET}`); };
 const info = (msg) => console.log(`${DIM}   ${msg}${RESET}`);
 
 // ─── Load secrets ────────────────────────────────────────────────────────────
@@ -209,28 +211,8 @@ function buildCursor() {
 // Uses "mcp.servers" key for v2, command is an array, env key is "environment"
 // IMPORTANT: Updates the "mcp.servers" key; preserves everything else (provider, plugins, etc.)
 function buildOpenCode() {
-  const opencodeFile = join(HOME, ".config/opencode/opencode.json");
-  let existing = {};
-  if (existsSync(opencodeFile)) {
-    try {
-      const raw = readFileSync(opencodeFile, "utf8");
-      // Backup before any modification
-      writeFileSync(opencodeFile + ".bak", raw, "utf8");
-      // Handle trailing commas + embedded control characters only
-      // NOTE: Do NOT strip // "comments" — would corrupt https:// URLs in strings!
-      const cleaned = raw
-        .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, "") // strip real ctrl chars (not \n \r)
-        .replace(/^\s*\/\/.*$/gm, "") // safely strip line comments
-        .replace(/\/\*[\s\S]*?\*\//g, "") // strip block comments
-        .replace(/,(\s*[}\]])/g, "$1"); // remove trailing commas
-      existing = JSON.parse(cleaned);
-    } catch (e) {
-      warn(`Could not parse existing opencode.json: ${e.message}`);
-      warn(
-        "MCP section will be written but other settings may be lost — backup is at .bak",
-      );
-    }
-  }
+  const opencodeFile = openCodeConfigPath();
+  const existing = readConfig(opencodeFile);
 
   const mcpServers = {};
   for (const [name, server] of Object.entries(servers)) {
@@ -265,33 +247,10 @@ function buildOpenCode() {
     mcpServers[name] = entry;
   }
 
-  // Update plugin path for rtk.ts to use current HOME
-  const pluginRtkPath = join(HOME, ".config/opencode/plugins/rtk.ts");
-  let plugins = existing.plugins ?? existing.plugin ?? [];
-  // Exclude context-mode temporarily to prevent v2 loading errors until upstream PR #1171 is released
-  plugins = plugins.filter((p) => p !== "context-mode");
-  plugins = plugins.map((p) =>
-    typeof p === "string" && p.includes("plugins/rtk.ts") ? pluginRtkPath : p,
-  );
-  if (
-    !plugins.some((p) => typeof p === "string" && p.includes("plugins/rtk.ts"))
-  ) {
-    plugins = [pluginRtkPath, ...plugins];
-  }
-
-  // Add MCP permissions for any new servers
-  const permission = { ...(existing.permission ?? {}) };
-  for (const name of Object.keys(servers)) {
-    if (name === "codegraph") {
-      permission[`mcp__codegraph__*`] = "allow";
-      permission[`mcp__codegraph__codegraph_explore`] = "allow";
-    } else if (name.startsWith("mysql")) {
-      const sanitized = name.replace(/-/g, "_");
-      permission[`mcp__${sanitized}__execute_sql`] = "allow";
-    } else if (name === "agent-browser") {
-      permission[`mcp__agent_browser__*`] = "allow";
-    }
-  }
+  // Global plugins/*.ts files are discovered automatically by OpenCode V2.
+  // Remove only the obsolete explicit RTK file entry; retain other plugins.
+  const plugins = (existing.plugins ?? existing.plugin ?? []).filter(p =>
+    !(typeof p === 'string' && p.includes('plugins/rtk.ts')));
 
   // Ensure global AGENTS.md is registered in instructions array
   const agentsMdPath = join(HOME, ".config/opencode/AGENTS.md");
@@ -302,8 +261,6 @@ function buildOpenCode() {
 
   const existingServers = existing.mcp?.servers ?? existing.mcp ?? {};
   delete existingServers.servers;
-  delete existingServers["test-mcp"];
-  delete existingServers.obsidian;
 
   const mcp = {
     servers: {
@@ -319,7 +276,6 @@ function buildOpenCode() {
     plugins,
     plugin: plugins,
     mcp,
-    permission,
   };
 }
 
@@ -336,27 +292,9 @@ async function syncCodex() {
       env: { ...process.env, ...secrets, ...opts.env },
     });
 
-  // Get existing MCP names from codex cli
-  let existingNames = [];
-  try {
-    const listOut = run(["mcp", "list"]);
-    existingNames = listOut
-      .split("\n")
-      .map((l) => l.trim().split(/\s+/)[0])
-      .filter((n) => n && n !== "Name" && n !== "context-mode"); // never remove context-mode plugin or table header
-  } catch {
-    /* ignore */
-  }
-
-  // Remove all existing managed servers so we can fully sync from servers.json
-  for (const name of existingNames) {
-    try {
-      run(["mcp", "remove", name]);
-      info(`Codex: removed old ${name}`);
-    } catch {
-      /* ignore */
-    }
-  }
+  // Upsert the declared servers only. Unmanaged servers are never removed.
+  const configFile = join(codexHome(), 'config.toml');
+  backupIfNeeded(configFile);
 
   // Add each server fresh
   for (const [name, server] of Object.entries(servers)) {
@@ -367,7 +305,7 @@ async function syncCodex() {
         run(cliArgs);
         ok(`Codex    (mcp add ${name} → ${resolvedUrl})`);
       } catch (e) {
-        err(`Codex add ${name}: ${e.message.slice(0, 80)}`);
+        throw new Error(`Codex add failed for ${name}`);
       }
       continue;
     }
@@ -386,12 +324,12 @@ async function syncCodex() {
       run(cliArgs);
       ok(`Codex    (mcp add ${name} → ${resolvedCmd})`);
     } catch (e) {
-      err(`Codex add ${name}: ${e.message.slice(0, 80)}`);
+      throw new Error(`Codex add failed for ${name}`);
     }
   }
 
   // Inject http_headers for remote servers into ~/.codex/config.toml
-  const codexConfigFile = join(HOME, ".codex/config.toml");
+  const codexConfigFile = join(codexHome(), 'config.toml');
   if (existsSync(codexConfigFile)) {
     let tomlContent = readFileSync(codexConfigFile, "utf8");
     let modified = false;
@@ -437,7 +375,7 @@ async function syncCodex() {
         new RegExp(
           `(\\[mcp_servers\\.${name}\\][\\s\\S]*?url\\s*=\\s*"[^"]*")`,
         ),
-        `$1\n${insertLine}`,
+        (_match, prefix) => `${prefix}\n${insertLine}`,
       );
 
       tomlContent =
@@ -544,14 +482,7 @@ function buildClaudeCode() {
 
 // ─── Write helpers ────────────────────────────────────────────────────────────
 function backupIfNeeded(file) {
-  if (existsSync(file) && !existsSync(file + ".bak")) {
-    try {
-      const raw = readFileSync(file, "utf8");
-      writeFileSync(file + ".bak", raw, "utf8");
-    } catch (e) {
-      warn(`Failed to backup ${file}: ${e.message}`);
-    }
-  }
+  backupFile(file);
 }
 
 function writeJson(file, data, label) {
@@ -579,15 +510,19 @@ function writeText(file, data, label) {
   const cursorFile = join(HOME, ".cursor/mcp.json");
   const vscodeMcpFile = join(HOME, ".config/Code/User/mcp.json");
   const agyIdeUserMcpFile = join(HOME, ".config/Antigravity IDE/User/mcp.json");
-  const opencodeFile = join(HOME, ".config/opencode/opencode.json");
+  // Resolve the selected OpenCode file inside its own error boundary.
+
 
   if (!process.env.SKIP_AGY) {
     try {
       const agyData = buildAgy();
-      writeJson(agyFileGlobal, agyData, "AGY (Global)");
-      writeJson(agyFileCli, agyData, "AGY (CLI)   ");
-      writeJson(agyFileIde, agyData, "AGY (IDE)   ");
-      writeJson(agyFileApp, agyData, "AGY (App)   ");
+      const targets = [agyFileGlobal, agyFileCli, agyFileIde, agyFileApp];
+      // Parse every destination before changing any AGY configuration.
+      const merged = targets.map(file => {
+        const existing = readConfig(file);
+        return { ...existing, mcpServers: { ...existing.mcpServers, ...agyData.mcpServers } };
+      });
+      targets.forEach((file, index) => writeJson(file, merged[index], 'AGY'));
     } catch (e) {
       err(`AGY: ${e.message}`);
     }
@@ -614,7 +549,7 @@ function writeText(file, data, label) {
 
   if (!process.env.SKIP_OPENCODE) {
     try {
-      writeJson(opencodeFile, buildOpenCode(), "OpenCode ");
+      writeJson(openCodeConfigPath(), buildOpenCode(), "OpenCode ");
     } catch (e) {
       err(`OpenCode: ${e.message}`);
     }
@@ -660,5 +595,5 @@ function writeText(file, data, label) {
     info("Claude Code → skipped (user opted out)");
   }
 
-  console.log("\n✨ MCP sync complete.\n");
+  console.log(process.exitCode ? "\nMCP sync failed; inspect the errors above.\n" : "\n✨ MCP sync complete.\n");
 })();

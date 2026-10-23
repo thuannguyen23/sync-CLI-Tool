@@ -8,8 +8,8 @@
  * This script (Step 7) is responsible for:
  *   1. Cursor:   merge hooks.json (context-mode + herdr) + MCP + rules
  *   2. AGY CLI:  install context-mode through its native managed plugin
- *   3. Codex:    merge hooks.json (herdr only — context-mode via marketplace plugin)
- *   4. OpenCode: ensure "context-mode" in plugin array (hooks via TypeScript plugin)
+ *   3. Codex:    merge native hooks and register the installed context-mode MCP
+ *   4. OpenCode: native context-mode MCP and V2 RTK plugin discovery
  *
  * Idempotent: safe to run multiple times.
  * Non-destructive: merges entries, preserves RTK hooks and other unmanaged config.
@@ -24,8 +24,10 @@ import {
   symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync
 } from 'fs'
 import { join, dirname } from 'path'
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import { homedir } from 'os'
+
+import { backupFile, codexHome, openCodeConfigPath, readConfig } from './config-utils.mjs'
 
 const HOME = homedir()
 
@@ -34,23 +36,17 @@ const GREEN = '\x1b[32m', YELLOW = '\x1b[33m', RED = '\x1b[31m'
 const DIM = '\x1b[2m', NC = '\x1b[0m'
 const ok   = msg => console.log(`${GREEN}✅ ${msg}${NC}`)
 const warn = msg => console.log(`${YELLOW}⚠️  ${msg}${NC}`)
-const err  = msg => console.log(`${RED}❌ ${msg}${NC}`)
+const err  = msg => { process.exitCode = 1; console.error(`${RED}❌ ${msg}${NC}`) }
 const info = msg => console.log(`${DIM}   ${msg}${NC}`)
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function readJSON(path) {
-  try { return JSON.parse(readFileSync(path, 'utf8')) }
-  catch { return null }
+  return readConfig(path)
 }
 
 function backupIfNeeded(path) {
-  if (existsSync(path) && !existsSync(path + '.bak')) {
-    try {
-      const raw = readFileSync(path, 'utf8')
-      writeFileSync(path + '.bak', raw, 'utf8')
-    } catch (e) { /* ignore */ }
-  }
+  backupFile(path)
 }
 
 function writeJSON(path, data) {
@@ -123,9 +119,17 @@ function normalizeAgyContextRule(pluginDst) {
   if (!rule.startsWith('---\n')) {
     writeFileSync(
       rulePath,
-      '---\nname: context-mode\ndescription: Context-mode routing for Antigravity CLI.\n---\n\n' + rule,
+      '---\nname: context-mode\ndescription: Context-mode routing for Antigravity CLI.\ntrigger: always_on\n---\n\n' + rule,
       'utf8',
     )
+  }
+
+  // Repair earlier managed copies that already have frontmatter but no trigger.
+  const currentRule = readFileSync(rulePath, 'utf8')
+  const frontmatter = currentRule.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (frontmatter && !/^trigger\s*:/m.test(frontmatter[1])) {
+    writeFileSync(rulePath, currentRule.replace(frontmatter[0],
+      `---\n${frontmatter[1]}\ntrigger: always_on\n---`), 'utf8')
   }
 
   // Previous setup versions created this external symlink without frontmatter.
@@ -137,6 +141,21 @@ function normalizeAgyContextRule(pluginDst) {
       info('AGY      legacy context-mode rule symlink removed')
     }
   } catch { /* no legacy rule */ }
+}
+
+function normalizeAgyContextHooks(pluginDst) {
+  const hookPath = join(pluginDst, 'hooks.json')
+  const config = readJSON(hookPath)
+  for (const definition of Object.values(config)) {
+    for (const event of ['SessionStart', 'PreInvocation', 'PostInvocation', 'Stop']) {
+      if (!Array.isArray(definition[event])) continue
+      definition[event] = definition[event].flatMap(entry => entry.hooks ?? [entry])
+    }
+  }
+  writeJSON(hookPath, config)
+  // This compatibility duplicate is ignored by AGY and fails strict validation.
+  const duplicate = join(pluginDst, 'hooks', 'hooks.json')
+  if (existsSync(duplicate)) unlinkSync(duplicate)
 }
 
 // ─── Hook merge helpers ─────────────────────────────────────────────────────
@@ -304,8 +323,7 @@ function syncAgy(ctxPkgDir) {
   const pluginDstIde    = join(HOME, '.gemini', 'antigravity-ide', 'plugins', 'context-mode')
 
   if (!existsSync(join(pluginSrc, 'plugin.json'))) {
-    warn(`AGY      context-mode plugin is incomplete: ${pluginSrc}`)
-    return
+    throw new Error(`AGY context-mode plugin is incomplete: ${pluginSrc}`)
   }
 
   // Deploy to all three possible locations for Antigravity v1 and v2.0+ decoupled paths
@@ -313,9 +331,10 @@ function syncAgy(ctxPkgDir) {
   cpSync(pluginSrc, pluginDstCli,    { recursive: true, force: true })
   cpSync(pluginSrc, pluginDstIde,    { recursive: true, force: true })
 
-  normalizeAgyContextRule(pluginDstGlobal)
-  normalizeAgyContextRule(pluginDstCli)
-  normalizeAgyContextRule(pluginDstIde)
+  for (const dst of [pluginDstGlobal, pluginDstCli, pluginDstIde]) {
+    normalizeAgyContextRule(dst)
+    normalizeAgyContextHooks(dst)
+  }
 
   allowAgyManagedSkillReads()
 
@@ -353,9 +372,9 @@ function syncAgy(ctxPkgDir) {
 
 // ─── 3. Codex CLI ───────────────────────────────────────────────────────────
 
-function syncCodex() {
-  const codexHome = process.env.CODEX_HOME || join(HOME, '.codex')
-  const hooksPath = join(codexHome, 'hooks.json')
+function syncCodex(ctxPkgDir) {
+  const codexDir = codexHome()
+  const hooksPath = join(codexDir, 'hooks.json')
   const config = readJSON(hooksPath) || { hooks: {} }
   if (!config.hooks) config.hooks = {}
   const hooks = config.hooks
@@ -373,15 +392,30 @@ function syncCodex() {
     }, 'herdr')
   }
 
-  // Context-mode: handled by Codex marketplace plugin (auto-manages its own hooks).
-  // DO NOT add context-mode hooks here — they are registered through
-  // .codex-plugin/hooks.json inside the plugin cache, not the global hooks.json.
-  // See: codex plugin marketplace add mksglu/context-mode
+  // Marketplace metadata alone does not install a plugin. Use the installed
+  // package's native adapter, without fetching or installing any dependency.
+  if (hasCmd('context-mode') && ctxPkgDir) {
+    const templatePath = join(ctxPkgDir, 'configs', 'codex', 'hooks.json')
+    if (existsSync(templatePath)) {
+      const template = readJSON(templatePath)
+      for (const [event, entries] of Object.entries(template.hooks || {})) {
+        for (const entry of entries) {
+          changed |= ensureCodexHook(hooks, event, entry, 'context-mode hook codex', true)
+        }
+      }
+    }
+    backupIfNeeded(join(codexDir, 'config.toml'))
+    const binary = execSync('which context-mode', { encoding: 'utf8' }).trim()
+    execFileSync('codex', ['mcp', 'add', 'context-mode', '--', binary], {
+      env: { ...process.env, CODEX_HOME: codexDir }, stdio: 'pipe',
+    })
+    ok('Codex    context-mode native MCP and hooks registered')
+  }
 
   // RTK: sync rtk_pre_tool_use.py hook script and register PreToolUse hook for Bash
   if (hasCmd('rtk')) {
     const codexHookSrc = join(dirname(new URL(import.meta.url).pathname), '..', 'hooks', 'codex', 'rtk_pre_tool_use.py')
-    const codexHooksDir = join(codexHome, 'hooks')
+    const codexHooksDir = join(codexDir, 'hooks')
     const codexHookDst = join(codexHooksDir, 'rtk_pre_tool_use.py')
     if (existsSync(codexHookSrc)) {
       mkdirSync(codexHooksDir, { recursive: true })
@@ -416,40 +450,44 @@ function syncCodex() {
 // ─── 4. OpenCode CLI ────────────────────────────────────────────────────────
 
 function syncOpenCode() {
-  const configPath = join(HOME, '.config', 'opencode', 'opencode.json')
-  if (!existsSync(configPath)) {
-    info('OpenCode opencode.json not found — skipping')
+  const configPath = openCodeConfigPath()
+  const config = readJSON(configPath) // Refuse malformed user config before writing anything.
+  if (hasCmd('context-mode')) {
+    const binary = execSync('which context-mode', { encoding: 'utf8' }).trim()
+    config.mcp ||= {}
+    config.mcp.servers ||= {}
+    config.mcp.servers['context-mode'] = { type: 'local', command: [binary], enabled: true }
+    // The installed context-mode plugin uses the V1 server API. V2 connects
+    // through native MCP instead; keep all unrelated plugins and settings.
+    for (const key of ['plugin', 'plugins']) {
+      if (Array.isArray(config[key])) config[key] = config[key].filter(p => p !== 'context-mode')
+    }
+    writeJSON(configPath, config)
+    ok('OpenCode context-mode native MCP registered')
+  }
+  if (!hasCmd('rtk')) {
+    info('OpenCode RTK skipped: rtk not found')
     return
   }
-
-  let config
-  try {
-    const raw = readFileSync(configPath, 'utf8')
-    // Handle trailing commas, comments, and control characters (same as sync-mcp.mjs)
-    const cleaned = raw
-      .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F]/g, '')
-      .replace(/^\s*\/\/.*$/gm, '')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/,(\s*[}\]])/g, '$1')
-    config = JSON.parse(cleaned)
-  } catch (e) {
-    err(`OpenCode: could not parse opencode.json: ${e.message}`)
+  const src = join(dirname(new URL(import.meta.url).pathname), '..', 'plugins', 'opencode', 'rtk.ts')
+  const dst = join(dirname(configPath), 'plugins', 'rtk.ts')
+  let stat
+  try { stat = lstatSync(dst) } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+  if (stat && !stat.isSymbolicLink()) {
+    if (stat.isFile() && readFileSync(dst, 'utf8') === readFileSync(src, 'utf8')) {
+      ok('OpenCode RTK plugin up to date')
+      return
+    }
+    throw new Error(`Refusing to replace an unmanaged OpenCode plugin: ${dst}`)
+  }
+  if (stat?.isSymbolicLink() && existsSync(dst) && realpathSync(dst) === realpathSync(src)) {
+    ok('OpenCode RTK plugin up to date')
     return
   }
-
-  let changed = false
-  // Temporarily remove context-mode from OpenCode v2 to avoid schema-loading errors.
-  if (Array.isArray(config.plugin) && config.plugin.includes('context-mode')) {
-    config.plugin = config.plugin.filter((p) => p !== 'context-mode')
-    changed = true
-  }
-  if (Array.isArray(config.plugins) && config.plugins.includes('context-mode')) {
-    config.plugins = config.plugins.filter((p) => p !== 'context-mode')
-    changed = true
-  }
-
-  if (changed) writeJSON(configPath, config)
-  ok(`OpenCode plugin array ${changed ? '(cleaned context-mode for v2)' : '(up to date)'}`)
+  if (!safeSymlink(src, dst)) throw new Error(`Could not install OpenCode RTK plugin: ${dst}`)
+  ok('OpenCode RTK plugin installed through native discovery')
 }
 
 // ─── 5. Kilo CLI ────────────────────────────────────────────────────────────
@@ -552,10 +590,10 @@ if (!HAS_CTX) {
 
 if (!process.env.SKIP_CURSOR) { try { syncCursor(ctxPkgDir) }  catch (e) { err(`Cursor: ${e.message}`) } } else { info('Cursor   hooks → skipped') }
 if (!process.env.SKIP_AGY) { try { syncAgy(ctxPkgDir) }     catch (e) { err(`AGY: ${e.message}`) } } else { info('AGY      hooks → skipped') }
-if (!process.env.SKIP_CODEX) { try { syncCodex() }            catch (e) { err(`Codex: ${e.message}`) } } else { info('Codex    hooks → skipped') }
+if (!process.env.SKIP_CODEX) { try { syncCodex(ctxPkgDir) }            catch (e) { err(`Codex: ${e.message}`) } } else { info('Codex    hooks → skipped') }
 if (!process.env.SKIP_OPENCODE) { try { syncOpenCode() }         catch (e) { err(`OpenCode: ${e.message}`) } } else { info('OpenCode hooks → skipped') }
 if (!process.env.SKIP_KILO) { try { syncKilo() }             catch (e) { err(`Kilo: ${e.message}`) } } else { info('Kilo     hooks → skipped') }
 if (!process.env.SKIP_CLAUDE) { try { syncClaude() }           catch (e) { err(`Claude Code: ${e.message}`) } } else { info('Claude Code hooks → skipped') }
 if (!process.env.SKIP_CLINE) { try { syncCline() }            catch (e) { err(`Cline: ${e.message}`) } } else { info('Cline    hooks → skipped') }
 
-console.log('\n✨ Hooks sync complete.\n')
+console.log(process.exitCode ? '\nHooks sync failed; inspect the errors above.\n' : '\n✨ Hooks sync complete.\n')

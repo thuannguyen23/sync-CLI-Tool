@@ -3,9 +3,10 @@
  * sync-rules.mjs — Distribute rules/AGENTS.md and rules/CLAUDE.md to all agent environments.
  */
 
-import { existsSync, mkdirSync, lstatSync, unlinkSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, lstatSync, unlinkSync, symlinkSync, readlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { backupFile, codexHome } from './config-utils.mjs';
 
 const HOME = homedir();
 const ROOT = join(import.meta.dirname, '..');
@@ -17,7 +18,8 @@ const targets = [
   { name: 'AGY CLI', dest: join(HOME, '.gemini', 'antigravity-cli', 'AGENTS.md'), src: AGENTS_MD },
   { name: 'AGY IDE', dest: join(HOME, '.gemini', 'antigravity-ide', 'AGENTS.md'), src: AGENTS_MD },
   { name: 'AGY App', dest: join(HOME, '.gemini', 'antigravity', 'AGENTS.md'), src: AGENTS_MD },
-  { name: 'Codex', dest: join(HOME, '.codex', 'AGENTS.md'), src: AGENTS_MD },
+  ...[...new Set([join(HOME, '.codex'), codexHome()])].map(dir =>
+    ({ name: 'Codex', dest: join(dir, 'AGENTS.md'), src: AGENTS_MD })),
   { name: 'OpenCode', dest: join(HOME, '.config', 'opencode', 'AGENTS.md'), src: AGENTS_MD },
   { name: 'Kilo', dest: join(HOME, '.config', 'kilo', 'AGENTS.md'), src: AGENTS_MD },
   { name: 'Cline', dest: join(HOME, '.cline', 'rules', 'AGENTS.md'), src: AGENTS_MD },
@@ -27,12 +29,26 @@ const targets = [
 export function syncRules() {
   let synced = 0;
   for (const { name, dest, src } of targets) {
+    const agent = name.startsWith('AGY') ? 'AGY' : name.startsWith('Claude') ? 'CLAUDE'
+      : name.startsWith('OpenCode') ? 'OPENCODE' : name.toUpperCase();
+    if (process.env[`SKIP_${agent}`]) continue;
     if (!existsSync(src)) continue;
     mkdirSync(dirname(dest), { recursive: true });
-    try {
-      const stat = lstatSync(dest);
-      if (stat.isSymbolicLink() || stat.isFile()) unlinkSync(dest);
-    } catch {}
+    let stat;
+    try { stat = lstatSync(dest); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (stat?.isSymbolicLink() && readlinkSync(dest) === src) {
+      synced++;
+      continue;
+    }
+    if (stat) {
+      if (!stat.isSymbolicLink() && !stat.isFile()) {
+        throw new Error(`Refusing to replace a rules directory: ${dest}`);
+      }
+      backupFile(dest);
+      unlinkSync(dest);
+    }
     symlinkSync(src, dest);
     synced++;
   }

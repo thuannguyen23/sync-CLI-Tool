@@ -81,6 +81,11 @@ export function syncSkills() {
   ];
 
   for (const target of targetDirs) {
+    const agent = target.name.startsWith('AGY') ? 'AGY'
+      : target.name.startsWith('Codex') ? 'CODEX'
+      : target.name.startsWith('Claude') ? 'CLAUDE'
+      : target.name.startsWith('Cursor') ? 'CURSOR' : target.name.toUpperCase();
+    if (process.env[`SKIP_${agent}`]) continue;
     try {
       if (!existsSync(target.path)) {
         mkdirSync(target.path, { recursive: true });
@@ -119,7 +124,7 @@ export function syncSkills() {
   // Cursor handling: ensure symlink exists
   const cursorUserDir = join(HOME, '.config', 'Cursor', 'User');
   const cursorSkillsLink = join(cursorUserDir, 'skills');
-  if (existsSync(cursorUserDir)) {
+  if (!process.env.SKIP_CURSOR && existsSync(cursorUserDir)) {
     const stat = lstatSafe(cursorSkillsLink);
     if (!stat) {
       try {
