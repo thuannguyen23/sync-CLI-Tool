@@ -145,7 +145,55 @@ runtime behavior has been checked separately. The existing `npm run health`
 command can start configured MCP processes and call MySQL tools; its HTTP branch
 does not test connectivity.
 
-### 4. Clean Uninstallation
+### 4. Task Handoff
+Create a Markdown handoff for another coding agent working in the same repository.
+First write task notes with the goal, approved decisions, completed work, previous
+verification results, remaining steps, and constraints:
+
+```markdown
+## Goal
+Describe the task.
+
+## Decisions and constraints
+Record what was approved and any limits.
+
+## Progress
+Record completed and incomplete work.
+
+## Verification
+Record the command, result, and code version, or state that checks were not run.
+
+## Next step
+Describe the first incomplete task.
+```
+
+From the target repository:
+
+```bash
+node ~/.agents/scripts/handoff.mjs --task task-notes.md
+```
+
+Or select a repository explicitly from this tool's checkout:
+
+```bash
+npm run handoff -- --project /path/to/repository --task task-notes.md
+```
+
+Task and output paths are resolved relative to the selected repository root.
+The default output is `HANDOFF.md`; use `--output next-agent.md` to choose another
+file. Its parent directory must exist. Existing files and symlinks are never
+overwritten.
+
+The output contains the supplied notes, branch, HEAD, Git status, and separate
+staged/unstaged change statistics. It does not copy working files or automatically
+collect chat history, credentials, or test results. Notes are included as supplied.
+
+Ask the receiving agent to read the handoff, read the project instructions,
+compare current Git state with the recorded snapshot, and continue the first
+incomplete task. Verification results in the notes are historical claims; rerun
+checks when needed. Creating a handoff does not grant permission for other actions.
+
+### 5. Clean Uninstallation
 To cleanly revert all symlinks and restore your original IDE settings from backups:
 ```bash
 ~/.agents/teardown.sh

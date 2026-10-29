@@ -8,6 +8,7 @@
     "test:teardown": "./test-teardown.sh",
     "sync": "node scripts/sync-skills.mjs && node scripts/sync-rules.mjs && node scripts/sync-mcp.mjs && node scripts/sync-hooks.mjs",
     "doctor": "node scripts/doctor.mjs",
+    "handoff": "node scripts/handoff.mjs",
     "health": "node scripts/health-check.mjs",
     "setup": "./setup.sh",
     "teardown": "./teardown.sh"
