@@ -134,11 +134,16 @@ git -C ~/.agents add -A && git commit -m "feat: add X mcp server" && git push
 ```
 
 ### 3. Verification & Health Checks
-Run the test suite and JSON-RPC live health probe:
+Inspect configuration without starting MCP servers, or run the test suite:
 ```bash
+npm run doctor  # Inspect MCP configuration, skill links, and supported hook files
 npm test        # Run unit tests across all sync modules
-npm run health  # Ping all configured MCP servers via real JSON-RPC handshakes
 ```
+
+`doctor` reports configured MCP servers and hooks as unverified until their
+runtime behavior has been checked separately. The existing `npm run health`
+command can start configured MCP processes and call MySQL tools; its HTTP branch
+does not test connectivity.
 
 ### 4. Clean Uninstallation
 To cleanly revert all symlinks and restore your original IDE settings from backups:
