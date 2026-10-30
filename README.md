@@ -141,7 +141,13 @@ npm test        # Run unit tests across all sync modules
 ```
 
 `doctor` reports configured MCP servers and hooks as unverified until their
-runtime behavior has been checked separately. The existing `npm run health`
+runtime behavior has been checked separately. For Codex RTK hooks, it checks
+that recognized entries use `PreToolUse`, that their matcher accepts `Bash`,
+and that a directly invoked, absolute Python script path is a regular file.
+A missing matcher applies to all tools. Relative paths, shell wrappers, variable
+expansion, and complex quoting remain unverified; commands are never executed.
+Other hook adapters retain configuration-only inspection.
+The existing `npm run health`
 command can start configured MCP processes and call MySQL tools; its HTTP branch
 does not test connectivity.
 

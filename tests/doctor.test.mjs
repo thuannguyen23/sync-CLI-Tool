@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -31,9 +32,9 @@ function fixture(t) {
     home,
     target,
     mcp,
-    run() {
+    run(env = {}) {
       return spawnSync(process.execPath, [script.pathname], {
-        env: { ...process.env, HOME: home, CODEX_HOME: join(home, '.codex') },
+        env: { ...process.env, HOME: home, CODEX_HOME: join(home, '.codex'), ...env },
         encoding: 'utf8',
         timeout: 10_000,
       });
@@ -51,9 +52,14 @@ test('reports configured MCP and hooks as unverified without exposing secrets', 
       },
     },
   }));
+  const hookPath = join(f.home, '.codex', 'rtk_pre_tool_use.py');
+  writeFileSync(hookPath, '# Fixture only; must never execute.\nraise RuntimeError("must not run")\n');
   writeFileSync(join(f.home, '.codex', 'hooks.json'), JSON.stringify({
     hooks: {
-      PreToolUse: [{ hooks: [{ command: 'python3 rtk_pre_tool_use.py' }] }],
+      PreToolUse: [{
+        matcher: '^Bash$',
+        hooks: [{ type: 'command', command: `python3 '${hookPath}'` }],
+      }],
     },
   }));
 
@@ -61,7 +67,7 @@ test('reports configured MCP and hooks as unverified without exposing secrets', 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /\[UNVERIFIED\] MCP remote: HTTP URL is valid; connection not tested/);
   assert.match(result.stdout, /\[OK\] Skill Codex default\/example/);
-  assert.match(result.stdout, /\[UNVERIFIED\] Codex RTK: Hook command is configured; execution not tested/);
+  assert.match(result.stdout, /\[UNVERIFIED\] Codex RTK: RTK event, matcher and script file checked; execution not tested/);
   assert.doesNotMatch(result.stdout, /private-test-token/);
 });
 
@@ -88,4 +94,53 @@ test('reports malformed hook configuration without claiming runtime health', t =
   assert.equal(result.status, 1);
   assert.match(result.stdout, /\[ERROR\] Codex hooks: Cannot read a valid JSON object/);
   assert.doesNotMatch(result.stdout, /healthy/i);
+});
+
+for (const [label, options, expected] of [
+  ['wrong event', { event: 'Stop' }, /\[ERROR\] Codex RTK: RTK hook must use PreToolUse/],
+  ['wrong matcher', { matcher: '^Read$' }, /\[ERROR\] Codex RTK: RTK matcher does not match Bash/],
+  ['invalid matcher', { matcher: '[' }, /\[ERROR\] Codex RTK: RTK matcher is invalid/],
+  ['wrong type', { type: 'prompt' }, /\[ERROR\] Codex RTK: RTK hook must have command type/],
+  ['missing script', { missing: true }, /\[ERROR\] Codex RTK: RTK script does not exist/],
+  ['directory script', { directory: true }, /\[ERROR\] Codex RTK: RTK script is not a regular file/],
+  ['valid script', {}, /\[UNVERIFIED\] Codex RTK: RTK event, matcher and script file checked; execution not tested/],
+  ['all-tools matcher', { matcher: null }, /\[UNVERIFIED\] Codex RTK: RTK event, matcher and script file checked; execution not tested/],
+  ['relative path', { command: 'python3 rtk_pre_tool_use.py' }, /\[UNVERIFIED\] Codex RTK: RTK command path cannot be checked statically/],
+  ['shell wrapper', { command: 'echo rtk_pre_tool_use.py' }, /\[UNVERIFIED\] Codex RTK: RTK command path cannot be checked statically/],
+]) {
+  test(`inspects Codex RTK ${label} without executing the hook`, t => {
+    const f = fixture(t);
+    writeFileSync(join(f.mcp, 'servers.json'), JSON.stringify({ servers: {} }));
+    const directory = join(f.home, 'hooks with spaces');
+    mkdirSync(directory);
+    const hookPath = join(directory, 'rtk_pre_tool_use.py');
+    if (options.directory) mkdirSync(hookPath);
+    else if (!options.missing) {
+      writeFileSync(hookPath, '# Fixture only; must never execute.\nraise RuntimeError("must not run")\n');
+    }
+    const group = {
+      ...(options.matcher === null ? {} : { matcher: options.matcher ?? '^Bash$' }),
+      hooks: [{ type: options.type ?? 'command', command: options.command ?? `python3 '${hookPath}'` }],
+    };
+    const file = join(f.home, '.codex', 'hooks.json');
+    const original = JSON.stringify({ hooks: { [options.event ?? 'PreToolUse']: [group] } });
+    writeFileSync(file, original);
+    const result = f.run();
+    assert.equal(result.status, expected.source.includes('ERROR') ? 1 : 0, result.stderr);
+    assert.match(result.stdout, expected);
+    assert.equal(readFileSync(file, 'utf8'), original);
+  });
+}
+
+test('inspects RTK in the active CODEX_HOME instead of the default profile', t => {
+  const f = fixture(t);
+  writeFileSync(join(f.mcp, 'servers.json'), JSON.stringify({ servers: {} }));
+  const profile = join(f.home, 'active profile');
+  mkdirSync(profile);
+  writeFileSync(join(profile, 'hooks.json'), JSON.stringify({
+    hooks: { Stop: [{ hooks: [{ command: 'python3 /missing/rtk_pre_tool_use.py' }] }] },
+  }));
+  const result = f.run({ CODEX_HOME: profile });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /\[ERROR\] Codex RTK: RTK hook must use PreToolUse/);
 });

@@ -6,9 +6,10 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  statSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 
 const home = homedir();
 const agentsDir = join(home, '.agents');
@@ -156,6 +157,58 @@ function commandsIn(value) {
   );
 }
 
+function inspectCodexRtk(hooks) {
+  const subject = 'Codex RTK';
+  let found = false;
+  for (const [event, groups] of Object.entries(hooks || {})) {
+    if (!Array.isArray(groups)) continue;
+    for (const group of groups) {
+      if (!Array.isArray(group?.hooks)) continue;
+      for (const hook of group.hooks) {
+        if (typeof hook?.command !== 'string' || !hook.command.includes('rtk_pre_tool_use.py')) continue;
+        found = true;
+        if (event !== 'PreToolUse') {
+          report('ERROR', subject, 'RTK hook must use PreToolUse');
+          continue;
+        }
+        if (hook.type !== undefined && hook.type !== 'command') {
+          report('ERROR', subject, 'RTK hook must have command type');
+          continue;
+        }
+        try {
+          if (group.matcher !== undefined &&
+              (typeof group.matcher !== 'string' || !new RegExp(group.matcher).test('Bash'))) {
+            report('ERROR', subject, 'RTK matcher does not match Bash');
+            continue;
+          }
+        } catch {
+          report('ERROR', subject, 'RTK matcher is invalid');
+          continue;
+        }
+        // Parse only a direct python3 invocation; never evaluate shell syntax.
+        const match = hook.command.match(/^python3\s+(?:'([^']+)'|"([^"$`\\]+)"|([^\s'"$`\\;|&<>]+))\s*$/);
+        const scriptPath = match && (match[1] ?? match[2] ?? match[3]);
+        if (!scriptPath || !isAbsolute(scriptPath) || basename(scriptPath) !== 'rtk_pre_tool_use.py') {
+          report('UNVERIFIED', subject, 'RTK command path cannot be checked statically; execution not tested');
+          continue;
+        }
+        try {
+          if (!statSync(scriptPath).isFile()) {
+            report('ERROR', subject, 'RTK script is not a regular file');
+            continue;
+          }
+        } catch (error) {
+          report('ERROR', subject, error.code === 'ENOENT'
+            ? 'RTK script does not exist' : 'Cannot inspect RTK script');
+          continue;
+        }
+        report('UNVERIFIED', subject, 'RTK event, matcher and script file checked; execution not tested');
+      }
+    }
+  }
+  if (!found) report('UNVERIFIED', subject, 'Hook command not found');
+}
+
 function inspectHooks() {
   const targets = [
     ['Codex', join(codexDir, 'hooks.json'), 'rtk_pre_tool_use.py'],
@@ -168,11 +221,13 @@ function inspectHooks() {
     const config = readObject(path, `${name} hooks`);
     if (!config) continue;
 
+    if (name === 'Codex') inspectCodexRtk(config.hooks);
     const commands = commandsIn(config.hooks);
     for (const [label, identifier] of [
       ['RTK', rtkIdentifier],
       ['context-mode', 'context-mode hook'],
     ]) {
+      if (name === 'Codex' && label === 'RTK') continue;
       const found = commands.some(command => command.includes(identifier));
       report(
         'UNVERIFIED',
