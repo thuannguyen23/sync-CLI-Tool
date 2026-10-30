@@ -151,6 +151,16 @@ The existing `npm run health`
 command can start configured MCP processes and call MySQL tools; its HTTP branch
 does not test connectivity.
 
+### Workflow Evaluation
+
+Prepare three disposable tasks, run your coding agent in fresh sessions, then
+grade its outcomes and compare instruction variants. The tool uses Node built-ins
+and never launches an AI provider or syncs your real client configuration itself.
+Candidate code execution requires your trust or an external OS sandbox.
+
+See [Workflow evaluation](docs/workflow-eval.md) for prepare, score, comparison,
+measurement provenance and the limits of the benchmark.
+
 ### 4. Task Handoff
 Create a Markdown handoff for another coding agent working in the same repository.
 First write task notes with the goal, approved decisions, completed work, previous
