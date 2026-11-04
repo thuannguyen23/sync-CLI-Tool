@@ -124,7 +124,7 @@ cp ~/.agents/secrets.env.example ~/.agents/secrets.env
 nano ~/.agents/secrets.env          # Fill in your API keys
 ~/.agents/setup.sh
 ```
-`setup.sh` automatically checks and installs prerequisites (`nvm/node`, `uv/uvx`, `rtk`, `codegraph`), sets up directory symlinks, configures hooks, and converts MCP server definitions for all detected tools.
+`setup.sh` automatically checks and installs all prerequisites (`nvm/node`, `uv/uvx`, `rtk`, `codegraph`, `context-mode`, `agent-browser`), sets up directory symlinks, configures hooks, and converts MCP server definitions for all detected tools. Pass `-s` or `--silent` for automated non-interactive runs.
 
 ### 2. Adding a New MCP Server
 ```bash
@@ -132,10 +132,12 @@ nano ~/.agents/mcp/servers.json     # Define your new server
 node ~/.agents/scripts/sync-mcp.mjs # Synchronize across all tools
 git -C ~/.agents add -A && git commit -m "feat: add X mcp server" && git push
 ```
+To sync everything (skills, rules, MCPs, and hooks) in one command, simply run `npm run sync`.
 
 ### 3. Verification & Health Checks
-Inspect configuration without starting MCP servers, or run the test suite:
+Test live MCP server connections, inspect configuration, or run the test suite:
 ```bash
+npm run health  # Ping all 11 MCP servers and verify tools/list JSON-RPC handshake
 npm run doctor  # Inspect MCP configuration, skill links, and supported hook files
 npm test        # Run unit tests across all sync modules
 ```

@@ -106,6 +106,34 @@ else
   fi
 fi
 
+# ─── context-mode (hook routing & context protection) ───────────────────
+section "context-mode"
+if has context-mode; then
+  ok "context-mode found: $(which context-mode)"
+else
+  warn "context-mode not found — installing globally via npm..."
+  if npm install -g context-mode; then
+    ok "context-mode installed: $(which context-mode)"
+  else
+    err "context-mode installation failed"
+    ERRORS=$((ERRORS+1))
+  fi
+fi
+
+# ─── agent-browser (Fast browser automation CLI) ────────────────────────
+section "agent-browser"
+if has agent-browser; then
+  ok "agent-browser found: $(which agent-browser)"
+else
+  warn "agent-browser not found — installing globally via npm..."
+  if npm install -g agent-browser; then
+    ok "agent-browser installed: $(which agent-browser)"
+  else
+    err "agent-browser installation failed"
+    ERRORS=$((ERRORS+1))
+  fi
+fi
+
 # ─── CLI tool detection (informational — not auto-installed) ─────────────────
 section "AI CLI tools (informational)"
 for tool in agy codex opencode cursor; do
