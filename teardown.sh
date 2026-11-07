@@ -30,167 +30,80 @@ show_help() {
   echo "Usage: ./teardown.sh [OPTIONS]"
   echo "Options:"
   echo "  -f, --force    Run without asking for confirmation"
+  echo "  --restore-backups  Restore .bak files, saving current configs first"
   echo "  -h, --help     Show this help message"
   exit 0
 }
 
 FORCE=0
+RESTORE_BACKUPS=0
 for arg in "$@"; do
-  case $arg in
+  case "$arg" in
     -f|--force) FORCE=1 ;;
-    -h|--help)  show_help ;;
-    *)          warn "Unknown option: $arg"; show_help ;;
+    --restore-backups) RESTORE_BACKUPS=1 ;;
+    -h|--help) show_help ;;
+    *) err "Unknown option: $arg"; exit 2 ;;
   esac
 done
-
+umask 077
 if [ "$FORCE" -eq 0 ]; then
-  echo -ne "${RED}❌ WARNING: This will remove all managed symlinks and restore configs from .bak files. Are you sure? [y/N] ${NC}"
-  read -r response
-  if [[ ! "$response" =~ ^(y|Y|yes|Yes)$ ]]; then
-    info "Teardown aborted."
-    exit 0
-  fi
+  read -r -p "Remove repository-owned links? Regular configs are preserved. [y/N] " response
+  [[ "$response" =~ ^(y|Y|yes|Yes)$ ]] || exit 0
 fi
-
 remove_symlink() {
-  local target="$1"
-  if [ -L "$target" ]; then
-    rm "$target"
-    ok "Removed symlink: $target"
-  elif [ -e "$target" ]; then
-    warn "Not a symlink, skipping removal (could be user-modified): $target"
+  local target="$1" source parent
+  [ -L "$target" ] || return 0
+  source="$(readlink "$target")"
+  [[ "$source" = /* ]] || source="$(dirname "$target")/$source"
+  if [ -d "$source" ]; then
+    source="$(cd -P "$source" && pwd)"
+  else
+    parent="$(cd -P "$(dirname "$source")" 2>/dev/null && pwd)" || { warn "Preserved unverifiable link: $target"; return 0; }
+    source="$parent/$(basename "$source")"
   fi
+  case "$source" in
+    "$AGENTS_DIR"|"$AGENTS_DIR"/*) rm -- "$target"; ok "Removed managed link: $target" ;;
+    *) warn "Preserved unrelated link: $target" ;;
+  esac
 }
-
 restore_bak() {
-  local target="$1"
-  local bak="${target}.bak"
-  if [ -e "$bak" ] || [ -L "$bak" ]; then
-    [ -e "$target" ] || [ -L "$target" ] && rm -rf "$target"
-    mv "$bak" "$target"
-    ok "Restored from backup: $target"
-  elif [ -e "$target" ] || [ -L "$target" ]; then
-    # No backup exists, meaning setup.sh created it fresh. Delete it.
-    rm -rf "$target"
-    ok "Deleted created file (no backup existed): $target"
+  local target="$1" bak="${1}.bak" saved
+  if [ "$RESTORE_BACKUPS" -eq 0 ] || [ ! -f "$bak" ] || [ -L "$bak" ]; then
+    [ ! -e "$target" ] || info "Preserved config: $target"
+    return 0
   fi
+  if [ -L "$target" ] || { [ -e "$target" ] && [ ! -f "$target" ]; }; then
+    warn "Preserved non-regular target: $target"; return 0
+  fi
+  if [ -f "$target" ]; then
+    saved="$(mktemp "${target}.before-teardown.XXXXXX")"
+    cp -- "$target" "$saved"
+    ok "Saved current config: $saved"
+  fi
+  cp -- "$bak" "$target"
+  chmod 600 "$target"
+  ok "Restored backup (original backup retained): $target"
 }
-
-echo -e "${BOLD}🧹 sync-CLI-Tool teardown${NC}"
-echo "=============================="
-
-# 1. ~/.agents symlink
-section "1 / 5  Core Directory"
-remove_symlink "$HOME_DIR/.agents"
-if [ -e "$HOME_DIR/.agents.bak" ]; then
-  mv "$HOME_DIR/.agents.bak" "$HOME_DIR/.agents"
-  ok "Restored ~/.agents from ~/.agents.bak"
-fi
-
-# 2. Global Rules (AGENTS.md)
-section "2 / 5  Global Rules"
-remove_symlink "$HOME_DIR/.gemini/config/AGENTS.md"
-[ -f "$HOME_DIR/.gemini/config/AGENTS.md" ] && rm -f "$HOME_DIR/.gemini/config/AGENTS.md" && ok "Removed AGY compiled AGENTS.md"
-remove_symlink "$HOME_DIR/.gemini/config/rules/antigravity-code-review.md"
-remove_symlink "$HOME_DIR/.gemini/antigravity-cli/AGENTS.md"
-remove_symlink "$HOME_DIR/.gemini/antigravity-cli/rules/antigravity-code-review.md"
-remove_symlink "$HOME_DIR/.gemini/antigravity-ide/AGENTS.md"
-remove_symlink "$HOME_DIR/.gemini/antigravity-ide/rules/antigravity-code-review.md"
-remove_symlink "$HOME_DIR/.gemini/antigravity/AGENTS.md"
-remove_symlink "$HOME_DIR/.config/opencode/AGENTS.md"
-remove_symlink "$HOME_DIR/.config/kilo/AGENTS.md"
-remove_symlink "$HOME_DIR/.claude/CLAUDE.md"
-remove_symlink "$HOME_DIR/.cline/rules/AGENTS.md"
-remove_symlink "$HOME_DIR/.codex/AGENTS.md"
-[ -f "$HOME_DIR/.codex/AGENTS.md" ] && rm -f "$HOME_DIR/.codex/AGENTS.md" && ok "Removed Codex compiled AGENTS.md"
-remove_symlink "$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
-if [ -e "$HOME_DIR/.cursor/plugins/local/sync-cli-tool.bak" ]; then
-  mv "$HOME_DIR/.cursor/plugins/local/sync-cli-tool.bak" "$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
-  ok "Restored Cursor local plugin backup"
-fi
-
-# 3. Skills
-section "3 / 5  Skills"
-remove_symlink "$HOME_DIR/.config/Cursor/User/skills"
-if [ -e "$HOME_DIR/.config/Cursor/User/skills.bak" ]; then
-  mv "$HOME_DIR/.config/Cursor/User/skills.bak" "$HOME_DIR/.config/Cursor/User/skills"
-  ok "Restored Cursor skills backup"
-fi
-
-# AGY & Codex specific skill symlinks
-if [ -d "$AGENTS_DIR/skills" ]; then
-  for skill_dir in "$AGENTS_DIR/skills"/*/; do
-    # Skip if not a directory
+echo "sync-CLI-Tool teardown: preserve personal files and backups"
+for target in \
+  "$HOME_DIR/.cursor/plugins/local/sync-cli-tool" \
+  "$HOME_DIR/.config/Cursor/User/skills" \
+  "$HOME_DIR/.config/opencode/plugins/rtk.ts"; do
+  remove_symlink "$target"
+done
+for base in   "$HOME_DIR/.gemini/config" "$HOME_DIR/.gemini/antigravity-cli"   "$HOME_DIR/.gemini/antigravity-ide" "$HOME_DIR/.gemini/antigravity"   "$HOME_DIR/.codex" "${CODEX_HOME:-$HOME_DIR/.codex}"   "$HOME_DIR/.config/opencode" "$HOME_DIR/.config/kilo"   "$HOME_DIR/.claude" "$HOME_DIR/.cline" "$HOME_DIR/.cursor"; do
+  remove_symlink "$base/AGENTS.md"
+  remove_symlink "$base/CLAUDE.md"
+  remove_symlink "$base/rules/AGENTS.md"
+  remove_symlink "$base/rules/antigravity-code-review.md"
+  for skill_dir in "$AGENTS_DIR"/skills/*/; do
     [ -d "$skill_dir" ] || continue
-    skill_name="$(basename "$skill_dir")"
-
-    # Remove from AGY (Global, CLI, IDE)
-    if [ -L "$HOME_DIR/.gemini/config/skills/$skill_name" ]; then
-       rm "$HOME_DIR/.gemini/config/skills/$skill_name"
-       ok "Removed AGY skill symlink (Global): $skill_name"
-    fi
-    if [ -L "$HOME_DIR/.gemini/antigravity-cli/skills/$skill_name" ]; then
-       rm "$HOME_DIR/.gemini/antigravity-cli/skills/$skill_name"
-    fi
-    if [ -L "$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name" ]; then
-       rm "$HOME_DIR/.gemini/antigravity-ide/skills/$skill_name"
-    fi
-
-    # Remove from Codex
-    if [ -L "$HOME_DIR/.codex/skills/$skill_name" ]; then
-       rm "$HOME_DIR/.codex/skills/$skill_name"
-       ok "Removed Codex skill symlink: $skill_name"
-    fi
-
-    # Remove from Claude Code
-    if [ -L "$HOME_DIR/.claude/skills/$skill_name" ]; then
-       rm "$HOME_DIR/.claude/skills/$skill_name"
-       ok "Removed Claude Code skill symlink: $skill_name"
-    fi
-
-    # Remove from Cline
-    if [ -L "$HOME_DIR/.cline/skills/$skill_name" ]; then
-       rm "$HOME_DIR/.cline/skills/$skill_name"
-       ok "Removed Cline skill symlink: $skill_name"
-    fi
+    remove_symlink "$base/skills/$(basename "$skill_dir")"
   done
-fi
-
-# 4. Plugins & Hooks & Configs (Restore .bak)
-section "4 / 5  Configs & Hooks"
-remove_symlink "$HOME_DIR/.config/opencode/plugins/rtk.ts"
-
-restore_bak "$HOME_DIR/.cursor/mcp.json"
-restore_bak "$HOME_DIR/.cursor/hooks.json"
-restore_bak "$HOME_DIR/.gemini/config/mcp_config.json"
-restore_bak "$HOME_DIR/.gemini/antigravity-cli/mcp_config.json"
-restore_bak "$HOME_DIR/.gemini/antigravity-ide/mcp_config.json"
-restore_bak "$HOME_DIR/.gemini/config/hooks.json"
-restore_bak "$HOME_DIR/.codex/hooks.json"
-restore_bak "$HOME_DIR/.config/opencode/opencode.json"
-restore_bak "$HOME_DIR/.config/kilo/kilo.json"
-restore_bak "$HOME_DIR/.config/kilo/kilo.jsonc"
-restore_bak "$HOME_DIR/.claude.json"
-restore_bak "$HOME_DIR/.claude/settings.json"
-restore_bak "$HOME_DIR/.cline/data/settings/cline_mcp_settings.json"
-restore_bak "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
-
-# 5. Codex MCP
-section "5 / 5  Codex MCP Servers"
-if has codex && [ -f "$AGENTS_DIR/mcp/servers.json" ] && has node; then
-  servers=$(node -e "
-    try {
-      const d = require('fs').readFileSync('$AGENTS_DIR/mcp/servers.json', 'utf8');
-      Object.keys(JSON.parse(d).servers).forEach(s => console.log(s));
-    } catch(e) {}
-  ")
-  for s in $servers; do
-    codex mcp remove "$s" 2>/dev/null && ok "Removed Codex MCP: $s" || true
-  done
-else
-  info "Skipping Codex MCP removal (codex not found or no servers to remove)"
-fi
-
-echo ""
-echo -e "${GREEN}${BOLD}  ✨ Teardown complete! All managed files reverted.${NC}"
-echo ""
+done
+for target in   "$HOME_DIR/.cursor/mcp.json" "$HOME_DIR/.cursor/hooks.json"   "$HOME_DIR/.gemini/config/mcp_config.json" "$HOME_DIR/.gemini/antigravity-cli/mcp_config.json"   "$HOME_DIR/.gemini/antigravity-ide/mcp_config.json" "$HOME_DIR/.gemini/antigravity/mcp_config.json"   "$HOME_DIR/.gemini/config/hooks.json" "$HOME_DIR/.codex/hooks.json"   "${CODEX_HOME:-$HOME_DIR/.codex}/hooks.json" "${CODEX_HOME:-$HOME_DIR/.codex}/config.toml"   "$HOME_DIR/.config/opencode/opencode.json" "$HOME_DIR/.config/opencode/opencode.jsonc"   "$HOME_DIR/.config/kilo/kilo.json" "$HOME_DIR/.config/kilo/kilo.jsonc"   "$HOME_DIR/.claude.json" "$HOME_DIR/.claude/settings.json"   "$HOME_DIR/.cline/data/settings/cline_mcp_settings.json"   "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"; do
+  restore_bak "$target"
+done
+remove_symlink "$HOME_DIR/.agents"
+echo "Teardown complete. Regular configs, installed packages and plugins remain."
+echo "Use --restore-backups explicitly to restore .bak files while saving current configs."

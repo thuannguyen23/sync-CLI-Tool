@@ -16,10 +16,12 @@ section() { echo -e "\n${DIM}── $1 ──${NC}"; }
 has() { command -v "$1" &>/dev/null; }
 
 ERRORS=0
+PREREQ_AGENTS_DIR="${AGENTS_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # ─── Node.js / npm / npx (via nvm) ──────────────────────────────────────────
 section "Node.js / npx"
 if has npx; then
+  node "$PREREQ_AGENTS_DIR/scripts/check-node.mjs" || { return 1 2>/dev/null || exit 1; }
   ok "npx found: $(which npx)"
 else
   warn "npx not found — installing Node.js via nvm..."
@@ -143,6 +145,11 @@ for tool in agy codex opencode cursor; do
     warn "$tool: not installed — config will be pre-written, activate after install"
   fi
 done
+
+if [ "$ERRORS" -eq 0 ]; then
+  node "$PREREQ_AGENTS_DIR/scripts/check-node.mjs" || { return 1 2>/dev/null || exit 1; }
+  node "$PREREQ_AGENTS_DIR/scripts/install-host-mcps.mjs" || ERRORS=$((ERRORS+1))
+fi
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 echo ""

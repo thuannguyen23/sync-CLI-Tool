@@ -1,224 +1,87 @@
 #!/usr/bin/env node
-/**
- * ~/.agents/scripts/health-check.mjs
- * Test all MCP servers in servers.json by sending real JSON-RPC calls.
- * Usage: node ~/.agents/scripts/health-check.mjs
- */
-
-import { execFileSync, spawn } from 'node:child_process'
-import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { homedir } from 'node:os'
-
-const HOME = homedir()
-const GREEN  = '\x1b[32m'; const YELLOW = '\x1b[33m'
-const RED    = '\x1b[31m'; const DIM    = '\x1b[2m'; const RESET = '\x1b[0m'
-const ok   = (m, d='') => console.log(`  ${GREEN}✅ ${m}${RESET}${d ? DIM+' '+d+RESET : ''}`)
-const warn = (m, d='') => console.log(`  ${YELLOW}⚠️  ${m}${RESET}${d ? DIM+' '+d+RESET : ''}`)
-const fail = (m, d='') => console.log(`  ${RED}❌ ${m}${RESET}${d ? DIM+' '+d+RESET : ''}`)
-
-// ─── Load secrets ─────────────────────────────────────────────────────────────
-const secrets = {}
-const secretsFile = join(HOME, '.agents/secrets.env')
-if (existsSync(secretsFile)) {
-  readFileSync(secretsFile, 'utf8').split('\n').forEach(l => {
-    l = l.trim(); if (!l || l.startsWith('#')) return
-    const eq = l.indexOf('='); if (eq < 0) return
-    secrets[l.slice(0, eq).trim()] = l.slice(eq + 1).trim()
-  })
+import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { loadSecrets,prepareServer,publicError } from './mcp-runtime.mjs';
+const args=process.argv.slice(2),json=args.includes('--json'),mysql=args.includes('--mysql');
+let timeout=8000,selected;
+for(let i=0;i<args.length;i++) {
+  if(args[i]==='--timeout-ms')timeout=Number(args[++i]);
+  else if(args[i]==='--server')selected=args[++i];
+  else if(!['--json','--mysql'].includes(args[i]))throw new Error(`Unknown health option: ${args[i]}`);
 }
-const interp = v => v.replace(/\$\{([^}]+)\}/g, (_, k) => secrets[k] ?? process.env[k] ?? '')
+if(!Number.isInteger(timeout)||timeout<50||timeout>60000)throw new Error('timeout-ms must be between 50 and 60000');
 
-// ─── Load servers ─────────────────────────────────────────────────────────────
-const { servers } = JSON.parse(readFileSync(join(HOME, '.agents/mcp/servers.json'), 'utf8'))
-
-// ─── MCP test helper ──────────────────────────────────────────────────────────
-function resolveBin(cmd) {
-  try { return execFileSync('which', [cmd], { encoding: 'utf8', stdio: 'pipe' }).trim() }
-  catch { return null }
+function rpcResult(message) {
+  if(message?.jsonrpc!=='2.0'||Object.hasOwn(message,'method')||!Object.hasOwn(message,'result')||Object.hasOwn(message,'error'))throw new Error('Invalid MCP JSON-RPC response');
+  return message.result;
 }
 
-function testMCP(name, server) {
-  return new Promise(resolve => {
-    if (server.url) {
-      const url = interp(server.url)
-      if (!url || url.includes('${')) {
-        resolve({ ok: false, error: 'missing URL configuration or secret' })
-        return
-      }
-      resolve({
-        ok: true,
-        serverName: `${name} (HTTP/SSE)`,
-        version: 'remote',
-        tools: null,
-      })
-      return
-    }
-
-    if (!Array.isArray(server.command) || server.command.length === 0) {
-      resolve({ ok: false, error: 'missing command configuration' })
-      return
-    }
-
-    const [cmd, ...rawArgs] = server.command
-    const bin = resolveBin(cmd) ?? cmd
-    const args = rawArgs.map(a => interp(a))
-    const env  = { ...process.env }
-    if (server.env) Object.entries(server.env).forEach(([k, v]) => { env[k] = interp(v) })
-
-    const proc = spawn(bin, args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
-    let out = '', done = false
-
-    const finish = result => {
-      if (done) return; done = true
-      proc.kill('SIGTERM')
-      resolve(result)
-    }
-
-    const timeout = setTimeout(() => finish({ ok: false, error: 'timeout — server did not respond in 8s' }), 8000)
-
-    proc.stdout.on('data', d => {
-      out += d.toString()
-      const lines = out.split('\n')
-      out = lines.pop()
-      for (const line of lines) {
-        if (!line.trim()) continue
-        try {
-          const msg = JSON.parse(line)
-          // initialize response
-          if (msg.result?.serverInfo) {
-            clearTimeout(timeout)
-            finish({
-              ok: true,
-              serverName: msg.result.serverInfo.name,
-              version: msg.result.serverInfo.version,
-              tools: null,
-            })
-            return
-          }
-          // tools/list response
-          if (msg.result?.tools) {
-            clearTimeout(timeout)
-            finish({
-              ok: true,
-              serverName: name,
-              version: '?',
-              tools: msg.result.tools.map(t => t.name),
-            })
-            return
-          }
-          // error response
-          if (msg.error) {
-            clearTimeout(timeout)
-            finish({ ok: false, error: msg.error.message })
-            return
-          }
-        } catch { /* not complete JSON yet */ }
-      }
-    })
-
-    proc.stderr.on('data', () => {})
-    proc.on('error', e => { clearTimeout(timeout); finish({ ok: false, error: e.message }) })
-
-    // Send initialize then tools/list
-    const init = JSON.stringify({
-      jsonrpc: '2.0', id: 1, method: 'initialize',
-      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'health-check', version: '1.0' } }
-    })
-    proc.stdin.write(init + '\n')
-  })
+function stdioTransport(config) {
+  const [cmd,...args]=config.command;
+  const child=spawn(cmd,args,{env:{...process.env,...config.env},stdio:['pipe','pipe','pipe'],detached:process.platform!=='win32'});
+  let buffer='',failure;const pending=new Map();
+  function fail(error){failure=error;for(const p of pending.values()){clearTimeout(p.timer);p.reject(error);}pending.clear();}
+  child.on('error',fail);child.on('exit',()=>fail(new Error('MCP exited')));child.stdin.on('error',fail);child.stderr.on('data',()=>{});
+  child.stdout.on('data',chunk=>{
+    buffer+=chunk;if(buffer.length>2*1024*1024){fail(new Error('MCP exceeds limit'));return;}
+    const lines=buffer.split('\n');buffer=lines.pop();
+    for(const line of lines){if(!line.trim())continue;try{const m=JSON.parse(line),p=pending.get(m.id);if(!p)continue;const result=rpcResult(m);pending.delete(m.id);clearTimeout(p.timer);p.resolve(result);}catch{fail(new Error('Invalid MCP JSON'));}}
+  });
+  return {
+    async send(m){if(failure)throw failure;if(m.id===undefined){child.stdin.write(JSON.stringify(m)+'\n');return;}return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(m.id);reject(new Error('MCP timeout'));},timeout);pending.set(m.id,{resolve,reject,timer});child.stdin.write(JSON.stringify(m)+'\n');});},
+    async close(){child.stdin.end();const signal=s=>{try{if(process.platform!=='win32')process.kill(-child.pid,s);else child.kill(s);}catch{}};signal('SIGTERM');await new Promise(r=>setTimeout(r,60));signal('SIGKILL');fail(new Error('MCP closed'));}
+  };
 }
-
-// ─── Also test tool call for mysql ───────────────────────────────────────────
-function testMCPCall(name, server, toolName, toolArgs = {}) {
-  return new Promise(resolve => {
-    if (!server.command || !Array.isArray(server.command)) {
-      resolve({ ok: false, error: 'not a stdio command server' })
-      return
+function httpTransport(config) {
+  let session,version;
+  return {
+    async send(m){
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
+      try{
+        const response=await fetch(config.url,{method:'POST',redirect:'error',signal:controller.signal,headers:{...config.headers,'Content-Type':'application/json',Accept:'application/json, text/event-stream',...(session?{'Mcp-Session-Id':session}:{}),...(version?{'MCP-Protocol-Version':version}:{})},body:JSON.stringify(m)});
+        if(!response.ok)throw new Error(`HTTP ${response.status}`);session=response.headers.get('mcp-session-id')??session;
+        if(m.id===undefined){await response.body?.cancel();return;}
+        let result;
+        if(response.headers.get('content-type')?.includes('text/event-stream')){
+          const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='';
+          try{outer:while(true){const {done,value}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});buffer=buffer.replace(/\r\n/g,'\n');if(buffer.length>2*1024*1024)throw new Error('MCP exceeds limit');const events=buffer.split('\n\n');buffer=events.pop();for(const event of events){const data=event.split('\n').filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trimStart()).join('\n');if(!data)continue;const msg=JSON.parse(data);if(msg.id===m.id){result=msg;break outer;}}}}finally{await reader.cancel();}
+        }else{const body=await response.text();if(body.length>2*1024*1024)throw new Error('MCP exceeds limit');result=JSON.parse(body);}
+        if(!result||result.id!==m.id)throw new Error('Invalid HTTP MCP response');const data=rpcResult(result);if(m.method==='initialize')version=data?.protocolVersion;return data;
+      }finally{clearTimeout(timer);}
+    },
+    async close(){
+      if(!session)return;
+      try{
+        const response=await fetch(config.url,{method:'DELETE',redirect:'error',signal:AbortSignal.timeout(Math.min(timeout,1000)),headers:{...config.headers,'Mcp-Session-Id':session,...(version?{'MCP-Protocol-Version':version}:{})}});
+        await response.body?.cancel();
+      }catch{/* Session termination is best-effort; some servers do not implement DELETE. */}
     }
-    const [cmd, ...rawArgs] = server.command
-    const bin = resolveBin(cmd) ?? cmd
-    const args = rawArgs.map(a => interp(a))
-    const env  = { ...process.env }
-    if (server.env) Object.entries(server.env).forEach(([k, v]) => { env[k] = interp(v) })
-
-    const proc = spawn(bin, args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
-    let out = '', done = false, initDone = false
-
-    const finish = result => { if (done) return; done = true; proc.kill('SIGTERM'); resolve(result) }
-    const timeout = setTimeout(() => finish({ ok: false, error: 'timeout' }), 10000)
-
-    proc.stdout.on('data', d => {
-      out += d.toString()
-      const lines = out.split('\n'); out = lines.pop()
-      for (const line of lines) {
-        if (!line.trim()) continue
-        try {
-          const msg = JSON.parse(line)
-          if (!initDone && msg.result?.serverInfo) {
-            initDone = true
-            // Send tool call
-            proc.stdin.write(JSON.stringify({
-              jsonrpc: '2.0', id: 2, method: 'tools/call',
-              params: { name: toolName, arguments: toolArgs }
-            }) + '\n')
-            return
-          }
-          if (initDone && msg.id === 2) {
-            clearTimeout(timeout)
-            if (msg.error) { finish({ ok: false, error: msg.error.message }); return }
-            const text = (msg.result?.content ?? []).map(c => c.text ?? '').join('')
-            const isError = text.toLowerCase().includes('error') || text.toLowerCase().includes('can\'t connect')
-            finish({ ok: !isError, data: text.slice(0, 120), error: isError ? text.slice(0,100) : null })
-            return
-          }
-        } catch {}
-      }
-    })
-
-    proc.stderr.on('data', () => {})
-    proc.on('error', e => { clearTimeout(timeout); finish({ ok: false, error: e.message }) })
-
-    proc.stdin.write(JSON.stringify({
-      jsonrpc: '2.0', id: 1, method: 'initialize',
-      params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'health-check', version: '1' } }
-    }) + '\n')
-  })
+  };
 }
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
-;(async () => {
-  console.log('\n🧪 MCP Health Check — ~/.agents/mcp/servers.json\n')
-
-  // Phase 1: initialize all
-  console.log(`${DIM}Phase 1: Server startup${RESET}`)
-  const startResults = await Promise.all(
-    Object.entries(servers).map(([name, server]) => testMCP(name, server).then(r => ({ name, ...r })))
-  )
-  for (const r of startResults) {
-    if (r.ok) ok(r.name.padEnd(22), `${r.serverName} v${r.version}`)
-    else      fail(r.name.padEnd(22), r.error)
-  }
-
-  // Phase 2: tool calls for mysql servers
-  console.log(`\n${DIM}Phase 2: Tool calls (get_schema_info)${RESET}`)
-  const mysqlServers = Object.keys(servers).filter(name => name.startsWith('mysql'))
-  for (const name of mysqlServers) {
-    if (!servers[name]) continue
-    const r = await testMCPCall(name, servers[name], 'get_schema_info', {})
-    if (r.ok) {
-      const tables = r.data.split('\n').filter(l => l.trim() && !l.startsWith('TABLE')).slice(0, 3).map(l => l.split(',')[0]).filter(Boolean)
-      ok(name.padEnd(22), `tables: ${tables.join(', ')}...`)
-    } else {
-      const isOffline = r.error?.includes('111') || r.error?.includes('connect')
-      if (isOffline) warn(name.padEnd(22), 'MySQL not running (start with: sudo systemctl start mysql)')
-      else           fail(name.padEnd(22), r.error ?? 'unknown error')
-    }
-  }
-
-  // Summary
-  const allOk = startResults.every(r => r.ok)
-  console.log('')
-  if (allOk) console.log(`${GREEN}✅ All MCP servers are healthy!${RESET}\n`)
-  else        console.log(`${YELLOW}⚠️  Some servers have issues — check above${RESET}\n`)
-})()
+async function check(name,server,secrets){
+  const ready=prepareServer(server,secrets);if(ready.status!=='READY')return {name,status:ready.status,detail:ready.detail};
+  const config=ready.config;if(config.transport==='sse')return {name,status:'UNVERIFIED',detail:'Legacy SSE transport requires a compatible client; not tested'};
+  let transport;
+  try{
+    transport=config.url?httpTransport(config):stdioTransport(config);let id=0;
+    const call=(method,params)=>transport.send({jsonrpc:'2.0',id:++id,method,...(params?{params}:{})});
+    const init=await call('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'sync-cli-health',version:'1'}});
+    if(!init?.serverInfo||!init?.capabilities?.tools||!['2024-11-05','2025-03-26','2025-06-18','2025-11-25'].includes(init.protocolVersion))throw new Error('Invalid MCP initialize');
+    await transport.send({jsonrpc:'2.0',method:'notifications/initialized'});
+    const tools=[],cursors=new Set();let cursor;
+    do{const listed=await call('tools/list',cursor?{cursor}:undefined);if(!Array.isArray(listed?.tools)||listed.tools.some(t=>typeof t.name!=='string'))throw new Error('Invalid tools/list');tools.push(...listed.tools.map(t=>t.name));cursor=listed.nextCursor;if(cursor&&(cursors.has(cursor)||cursors.size>=100))throw new Error('Invalid tool pagination');if(cursor)cursors.add(cursor);}while(cursor);
+    if(mysql&&name.startsWith('mysql')){if(!tools.includes('get_schema_info'))throw new Error('Missing schema tool');const result=await call('tools/call',{name:'get_schema_info',arguments:{}});if(!result||result.isError)throw new Error('MySQL tool failed');}
+    return {name,status:'PASS',version:init.serverInfo.version,tools,mysqlCall:mysql&&name.startsWith('mysql')};
+  }catch(error){return {name,status:'ERROR',detail:publicError(error)};}finally{await transport?.close();}
+}
+try{
+  const root=join(homedir(),'.agents'),{servers}=JSON.parse(readFileSync(join(root,'mcp/servers.json'),'utf8'));
+  if(selected&&!Object.hasOwn(servers,selected))throw new Error('Unknown server');
+  const secrets=loadSecrets(join(root,'secrets.env')),results=[],entries=Object.entries(servers).filter(([name])=>!selected||name===selected);
+  // Keep startup concurrency bounded: servers may be large Node/Python processes.
+  for(let i=0;i<entries.length;i+=2)results.push(...await Promise.all(entries.slice(i,i+2).map(([name,s])=>check(name,s,secrets))));
+  if(json)console.log(JSON.stringify({results}));else for(const r of results)console.log(`[${r.status}] ${r.name}: ${r.status==='PASS'?`${r.tools.length} tools; MCP initialize and tools/list passed${r.mysqlCall?'; schema call passed':''}`:r.detail}`);
+  if(results.some(r=>!['PASS','SKIPPED'].includes(r.status)))process.exitCode=1;
+}catch{console.error('Health check could not read configuration or select the requested server');process.exitCode=1;}

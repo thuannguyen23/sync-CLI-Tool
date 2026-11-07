@@ -14,6 +14,14 @@ import { test } from 'node:test';
 
 const script = new URL('../scripts/doctor.mjs', import.meta.url);
 
+test('doctor identifies missing inputs, optional skips and native v2 hooks without execution', t => {
+  const f=fixture(t);
+  writeFileSync(join(f.mcp,'servers.json'),JSON.stringify({servers:{optional:{command:['true'],requiredSecrets:['DOCTOR_OPTIONAL_FIXTURE']},database:{command:['true'],env:{HOST:'${DOCTOR_MISSING_FIXTURE}'}}}}));
+  writeFileSync(join(f.home,'.agents/secrets.env'),'DOCTOR_OPTIONAL_FIXTURE=""\n');
+  writeFileSync(join(f.home,'.codex/hooks.json'),JSON.stringify({hooks:{Stop:[{hooks:[{command:'node /fixture/context-mode/hook.mjs --agent codex'}]}]}}));
+  const r=f.run();assert.match(r.stdout,/\[SKIPPED\] MCP optional/);assert.match(r.stdout,/\[UNCONFIGURED\] MCP database/);assert.match(r.stdout,/Codex context-mode: Hook command is configured/);
+});
+
 function fixture(t) {
   const home = mkdtempSync(join(tmpdir(), 'agent-doctor-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));

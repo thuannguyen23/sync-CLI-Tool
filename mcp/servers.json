@@ -1,32 +1,51 @@
 {
   "servers": {
     "context7": {
-      "command": ["npx", "-y", "@upstash/context7-mcp@1.0.31"],
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
       "env": {
         "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
       },
-      "requires": ["npx"],
+      "requires": [
+        "npx"
+      ],
       "description": "Library docs lookup via Context7"
     },
     "sequential-thinking": {
       "command": [
         "npx",
         "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
+        "@modelcontextprotocol/server-sequential-thinking@latest"
       ],
-      "requires": ["npx"],
+      "requires": [
+        "npx"
+      ],
       "description": "Sequential reasoning / chain-of-thought"
     },
     "codegraph": {
-      "command": ["codegraph", "serve", "--mcp"],
+      "command": [
+        "codegraph",
+        "serve",
+        "--mcp"
+      ],
       "env": {
         "CODEGRAPH_NO_DAEMON": "0"
       },
-      "requires": ["codegraph"],
+      "requires": [
+        "codegraph"
+      ],
       "description": "Code intelligence and knowledge graph"
     },
     "mysql-local-ecb": {
-      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "command": [
+        "uvx",
+        "--from",
+        "mysql-mcp-server",
+        "mysql_mcp_server"
+      ],
       "env": {
         "MYSQL_HOST": "${MYSQL_LOCAL_ECB_HOST}",
         "MYSQL_PORT": "${MYSQL_LOCAL_ECB_PORT}",
@@ -34,11 +53,18 @@
         "MYSQL_PASSWORD": "${MYSQL_LOCAL_ECB_PASSWORD}",
         "MYSQL_DATABASE": "${MYSQL_LOCAL_ECB_DB}"
       },
-      "requires": ["uvx"],
-      "description": "MySQL MCP — Local ECB database"
+      "requires": [
+        "uvx"
+      ],
+      "description": "MySQL MCP \u2014 Local ECB database"
     },
     "mysql-develop-ecb": {
-      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "command": [
+        "uvx",
+        "--from",
+        "mysql-mcp-server",
+        "mysql_mcp_server"
+      ],
       "env": {
         "MYSQL_HOST": "${MYSQL_DEVELOP_ECB_HOST}",
         "MYSQL_PORT": "${MYSQL_DEVELOP_ECB_PORT}",
@@ -47,11 +73,18 @@
         "MYSQL_DATABASE": "${MYSQL_DEVELOP_ECB_DB}",
         "MYSQL_SSL_MODE": "REQUIRED"
       },
-      "requires": ["uvx"],
-      "description": "MySQL MCP — Remote ECB/develop database"
+      "requires": [
+        "uvx"
+      ],
+      "description": "MySQL MCP \u2014 Remote ECB/develop database"
     },
     "mysql-remote-jcf": {
-      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "command": [
+        "uvx",
+        "--from",
+        "mysql-mcp-server",
+        "mysql_mcp_server"
+      ],
       "env": {
         "MYSQL_HOST": "${MYSQL_REMOTE_JCF_HOST}",
         "MYSQL_PORT": "${MYSQL_REMOTE_JCF_PORT}",
@@ -60,11 +93,18 @@
         "MYSQL_DATABASE": "${MYSQL_REMOTE_JCF_DB}",
         "MYSQL_SSL_MODE": "${MYSQL_REMOTE_JCF_SSL_MODE}"
       },
-      "requires": ["uvx"],
-      "description": "MySQL MCP — Remote JC Finance database"
+      "requires": [
+        "uvx"
+      ],
+      "description": "MySQL MCP \u2014 Remote JC Finance database"
     },
     "mysql-local-forbes": {
-      "command": ["uvx", "--from", "mysql-mcp-server", "mysql_mcp_server"],
+      "command": [
+        "uvx",
+        "--from",
+        "mysql-mcp-server",
+        "mysql_mcp_server"
+      ],
       "env": {
         "MYSQL_HOST": "${MYSQL_LOCAL_FORBES_HOST}",
         "MYSQL_PORT": "${MYSQL_LOCAL_FORBES_PORT}",
@@ -72,37 +112,90 @@
         "MYSQL_PASSWORD": "${MYSQL_LOCAL_FORBES_PASSWORD}",
         "MYSQL_DATABASE": "${MYSQL_LOCAL_FORBES_DB}"
       },
-      "requires": ["uvx"],
-      "description": "MySQL MCP — Local Forbes database"
+      "requires": [
+        "uvx"
+      ],
+      "description": "MySQL MCP \u2014 Local Forbes database"
     },
     "obsidian-vault": {
       "command": [
         "npx",
         "-y",
-        "obsidian-mcp",
+        "obsidian-mcp@latest",
         "serve",
         "--vault",
         "main=${OBSIDIAN_VAULT_PATH}"
       ],
-      "requires": ["npx"],
+      "requires": [
+        "npx"
+      ],
       "description": "Obsidian Vault MCP server for notes, search, and tags"
     },
     "github": {
-      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "command": [
+        "sh",
+        "${HOME}/.agents/scripts/github-mcp-host.sh"
+      ],
+      "requires": [
+        "sh",
+        "gh",
+        "github-mcp-server"
+      ],
+      "description": "Official GitHub MCP server using the signed-in gh account"
+    },
+    "slack": {
+      "command": [
+        "slack-mcp"
+      ],
       "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}"
       },
-      "requires": ["npx"],
-      "description": "GitHub repository management, PRs, and issues"
+      "requiredSecrets": [
+        "SLACK_BOT_TOKEN"
+      ],
+      "requires": [
+        "slack-mcp"
+      ],
+      "description": "Slack MCP using a bot token; skipped when the token is empty"
+    },
+    "telegram": {
+      "command": [
+        "node",
+        "${HOME}/.local/share/sync-cli-tool/telegram-api-mcp/dist/index.js"
+      ],
+      "env": {
+        "TELEGRAM_BOT_TOKEN": "${TELEGRAM_BOT_TOKEN}",
+        "TELEGRAM_META_MODE": "true"
+      },
+      "requiredSecrets": [
+        "TELEGRAM_BOT_TOKEN"
+      ],
+      "requires": [
+        "node"
+      ],
+      "description": "Telegram Bot API MCP in meta mode; skipped when the token is empty"
     },
     "web-search": {
-      "command": ["npx", "-y", "@zhafron/mcp-web-search"],
-      "requires": ["npx"],
+      "command": [
+        "npx",
+        "-y",
+        "@zhafron/mcp-web-search@latest"
+      ],
+      "requires": [
+        "npx"
+      ],
       "description": "Web search (DuckDuckGo, Bing) without needing an API key"
     },
     "agent-browser": {
-      "command": ["npx", "-y", "@nxavis/agent-browser-mcp"],
-      "requires": ["npx", "agent-browser"],
+      "command": [
+        "npx",
+        "-y",
+        "@nxavis/agent-browser-mcp@latest"
+      ],
+      "requires": [
+        "npx",
+        "agent-browser"
+      ],
       "description": "Fast, token-efficient browser automation designed for AI agents"
     }
   }

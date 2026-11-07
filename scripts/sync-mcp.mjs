@@ -11,8 +11,10 @@
  *   Claude Code → ~/.claude.json                      (JSON, top-level mcpServers, merged)
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from "node:fs";
+import { randomUUID } from 'node:crypto';
 import { execSync } from "node:child_process";
+import { parseEnv } from "node:util";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
@@ -37,15 +39,9 @@ const info = (msg) => console.log(`${DIM}   ${msg}${RESET}`);
 // ─── Load secrets ────────────────────────────────────────────────────────────
 const secrets = {};
 if (existsSync(SECRETS_FILE)) {
-  readFileSync(SECRETS_FILE, "utf8")
-    .split("\n")
-    .forEach((line) => {
-      line = line.trim();
-      if (!line || line.startsWith("#")) return;
-      const eqIdx = line.indexOf("=");
-      if (eqIdx === -1) return;
-      const key = line.slice(0, eqIdx).trim();
-      let val = line.slice(eqIdx + 1).trim();
+  Object.entries(parseEnv(readFileSync(SECRETS_FILE, "utf8")))
+    .forEach(([key, raw]) => {
+      let val = raw;
       if (val.startsWith("~/")) {
         val = join(HOME, val.slice(2));
       }
@@ -73,6 +69,7 @@ if (!existsSync(SERVERS_FILE)) {
 }
 
 let servers = {};
+const skippedForSecrets = new Set();
 try {
   const parsed = JSON.parse(readFileSync(SERVERS_FILE, "utf8"));
   if (
@@ -93,6 +90,18 @@ try {
         `servers.json is invalid: Server '${name}' must have either a 'url' string or a 'command' array.`,
       );
       process.exit(1);
+    }
+    if (config.requiredSecrets) {
+      if (!Array.isArray(config.requiredSecrets) || config.requiredSecrets.some(k => typeof k !== 'string')) throw new Error('Invalid requiredSecrets');
+      const missing = config.requiredSecrets.filter(key => {
+        const value = String(secrets[key] ?? process.env[key] ?? '').trim();
+        return !value || value === '""' || value === "''";
+      });
+      if (missing.length) {
+        warn(`MCP '${name}' skipped: required secret not configured (${missing.join(', ')})`);
+        skippedForSecrets.add(name);
+        delete servers[name];
+      }
     }
   }
 } catch (e) {
@@ -249,7 +258,7 @@ function buildOpenCode() {
 
   // Global plugins/*.ts files are discovered automatically by OpenCode V2.
   // Remove only the obsolete explicit RTK file entry; retain other plugins.
-  const plugins = (existing.plugins ?? existing.plugin ?? []).filter(p =>
+  const plugins = [...new Set([...(existing.plugins ?? []), ...(existing.plugin ?? [])])].filter(p =>
     !(typeof p === 'string' && p.includes('plugins/rtk.ts')));
 
   // Ensure global AGENTS.md is registered in instructions array
@@ -263,6 +272,7 @@ function buildOpenCode() {
   delete existingServers.servers;
 
   const mcp = {
+    ...(existing.mcp?.servers ? Object.fromEntries(Object.entries(existing.mcp).filter(([key]) => key !== 'servers')) : {}),
     servers: {
       ...existingServers,
       ...mcpServers,
@@ -313,15 +323,24 @@ async function syncCodex() {
     // Resolve absolute path — Codex runs sandboxed and may not have ~/.local/bin in PATH
     const resolvedCmd = resolveBin(cmd) ?? cmd;
     const cliArgs = ["mcp", "add", name];
+    const replacements = [];
     if (server.env) {
       for (const [k, v] of Object.entries(server.env)) {
-        cliArgs.push("--env", `${k}=${interpolate(v)}`);
+        const marker = `sync-cli-env-${randomUUID()}`;
+        replacements.push([marker, interpolate(v)]);
+        cliArgs.push("--env", `${k}=${marker}`);
       }
     }
     cliArgs.push("--");
     cliArgs.push(resolvedCmd, ...args.map((a) => interpolate(a)));
     try {
       run(cliArgs);
+      if (replacements.length) {
+        let config = readFileSync(configFile, 'utf8');
+        for (const [marker, value] of replacements) config = config.replaceAll(JSON.stringify(marker), JSON.stringify(value));
+        writeFileSync(configFile, config, { mode: 0o600 });
+        chmodSync(configFile, 0o600);
+      }
       ok(`Codex    (mcp add ${name} → ${resolvedCmd})`);
     } catch (e) {
       throw new Error(`Codex add failed for ${name}`);
@@ -488,7 +507,8 @@ function backupIfNeeded(file) {
 function writeJson(file, data, label) {
   mkdirSync(dirname(file), { recursive: true });
   backupIfNeeded(file);
-  writeFileSync(file, JSON.stringify(data, null, 2) + "\n", "utf8");
+  writeFileSync(file, JSON.stringify(data, null, 2) + "\n", { encoding: 'utf8', mode: 0o600 });
+  chmodSync(file, 0o600);
   ok(`${label} → ${file} (backed up to .bak)`);
 }
 
@@ -501,6 +521,25 @@ function writeText(file, data, label) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 (async () => {
+  // Refuse to report a clean sync when an old registration may still contain
+  // a credential that was just removed. Preserve personal entries verbatim.
+  if (skippedForSecrets.size) {
+    const paths = [];
+    if (!process.env.SKIP_AGY) for (const b of ['config','antigravity-cli','antigravity-ide','antigravity']) paths.push(['json',join(HOME,'.gemini',b,'mcp_config.json')]);
+    if (!process.env.SKIP_CURSOR) for (const p of [join(HOME,'.cursor/mcp.json'),join(HOME,'.config/Code/User/mcp.json'),join(HOME,'.config/Antigravity IDE/User/mcp.json')]) paths.push(['json',p]);
+    if (!process.env.SKIP_OPENCODE) paths.push(['opencode',openCodeConfigPath()]);
+    if (!process.env.SKIP_CLAUDE) paths.push(['json',join(HOME,'.claude.json')]);
+    if (!process.env.SKIP_CLINE) for (const p of [join(HOME,'.cline/data/settings/cline_mcp_settings.json'),join(HOME,'.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json')]) paths.push(['json',p]);
+    if (!process.env.SKIP_CODEX) paths.push(['codex',join(codexHome(),'config.toml')]);
+    for (const [type,file] of paths) {
+      if (!existsSync(file)) continue;
+      let names;
+      if (type === 'codex') names = [...readFileSync(file,'utf8').matchAll(/^\s*\[mcp_servers\.(?:"([^"]+)"|([^\].\s]+))\]/gm)].map(m => m[1] ?? m[2]);
+      else { const d=readConfig(file); names=type==='opencode' ? [...Object.keys(d.mcp ?? {}), ...Object.keys(d.mcp?.servers ?? {})] : Object.keys(d.mcpServers ?? d.servers ?? {}); }
+      const stale=names.filter(name=>skippedForSecrets.has(name));
+      if (stale.length) { err(`Existing optional MCP (${stale.join(', ')}) has no configured secret; preserved without changes in ${file}`); return; }
+    }
+  }
   console.log("\n🔌 Syncing MCP configs from servers.json...\n");
 
   const agyFileGlobal = join(HOME, ".gemini/config/mcp_config.json");

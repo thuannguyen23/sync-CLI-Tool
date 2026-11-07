@@ -52,7 +52,8 @@ function backupIfNeeded(path) {
 function writeJSON(path, data) {
   mkdirSync(dirname(path), { recursive: true })
   backupIfNeeded(path)
-  writeFileSync(path, JSON.stringify(data, null, 2) + '\n')
+  writeFileSync(path, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 })
+  chmodSync(path, 0o600)
 }
 
 function hasCmd(cmd) {
@@ -82,7 +83,7 @@ function findContextModePkg() {
       encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore']
     }).trim()
     const pkg = join(root, 'context-mode')
-    if (existsSync(join(pkg, 'configs'))) return pkg
+    if (existsSync(join(pkg, 'configs')) || existsSync(join(pkg, 'package.json'))) return pkg
   } catch { /* npm not available */ }
   return null
 }
@@ -313,6 +314,27 @@ function syncAgy(ctxPkgDir) {
     return
   }
 
+  const ctxVersion = existsSync(join(ctxPkgDir, 'package.json')) ? readJSON(join(ctxPkgDir, 'package.json')).version : ''
+  if (Number.parseInt(ctxVersion, 10) >= 2) {
+    const legacy = ['config', 'antigravity-cli', 'antigravity-ide'].some(base => {
+      const manifest=join(HOME,'.gemini',base,'plugins/context-mode/plugin.json')
+      return existsSync(manifest) && Number.parseInt(readJSON(manifest).version,10) < 2
+    })
+    if (legacy) {
+      if (!hasCmd('agy')) throw new Error('Disable the legacy context-mode plugin with agy before syncing v2')
+      execFileSync('agy',['plugin','disable','context-mode'],{stdio:'pipe'})
+    }
+    for (const base of ['config', 'antigravity-cli', 'antigravity-ide', 'antigravity']) {
+      const file = join(HOME, '.gemini', base, 'mcp_config.json')
+      const config = readJSON(file) || {}
+      config.mcpServers ||= {}
+      config.mcpServers['context-mode'] = { command: process.execPath, args: [join(ctxPkgDir, 'server.mjs'), '--agent', 'gemini'] }
+      writeJSON(file, config)
+    }
+    ok('AGY      context-mode v2 MCP registered; obsolete plugin disabled when present (no v2 AGY hooks)')
+    return
+  }
+
   // AGY loads hooks, MCP servers, rules, and skills from a plugin in its
   // customization directory. Copy instead of symlinking so AGY treats the
   // skill files as local plugin content and does not request access to npm's
@@ -406,7 +428,9 @@ function syncCodex(ctxPkgDir) {
     }
     backupIfNeeded(join(codexDir, 'config.toml'))
     const binary = execSync('which context-mode', { encoding: 'utf8' }).trim()
-    execFileSync('codex', ['mcp', 'add', 'context-mode', '--', binary], {
+    const version = existsSync(join(ctxPkgDir, 'package.json')) ? readJSON(join(ctxPkgDir, 'package.json')).version : ''
+    const serverArgs = Number.parseInt(version, 10) >= 2 ? ['server', '--agent', 'codex'] : []
+    execFileSync('codex', ['mcp', 'add', 'context-mode', '--', binary, ...serverArgs], {
       env: { ...process.env, CODEX_HOME: codexDir }, stdio: 'pipe',
     })
     ok('Codex    context-mode native MCP and hooks registered')
@@ -456,10 +480,17 @@ function syncOpenCode() {
     const binary = execSync('which context-mode', { encoding: 'utf8' }).trim()
     config.mcp ||= {}
     config.mcp.servers ||= {}
-    config.mcp.servers['context-mode'] = { type: 'local', command: [binary], enabled: true }
-    // The installed context-mode plugin uses the V1 server API. V2 connects
-    // through native MCP instead; keep all unrelated plugins and settings.
-    for (const key of ['plugin', 'plugins']) {
+    const version = ctxPkgDir && existsSync(join(ctxPkgDir, 'package.json'))
+      ? readJSON(join(ctxPkgDir, 'package.json')).version : ''
+    if (Number.parseInt(version, 10) >= 2 && existsSync(join(ctxPkgDir, 'server.mjs'))) {
+      config.mcp['context-mode'] = { type: 'local', command: [process.execPath, join(ctxPkgDir, 'server.mjs'), '--agent', 'opencode'], enabled: true }
+      delete config.mcp.servers['context-mode']
+    } else {
+      config.mcp.servers['context-mode'] = { type: 'local', command: [binary], enabled: true }
+    }
+    // Legacy context-mode plugins used a different API. Version 2 supports
+    // OpenCode's plugin hooks; preserve an existing upstream installation.
+    if (Number.parseInt(version, 10) < 2 || !version) for (const key of ['plugin', 'plugins']) {
       if (Array.isArray(config[key])) config[key] = config[key].filter(p => p !== 'context-mode')
     }
     writeJSON(configPath, config)

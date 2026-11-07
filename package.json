@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to AGY, Codex, OpenCode, Cursor, Kilo, Cline, and Claude Code",
   "type": "module",
+  "engines": { "node": ">=24.15.0" },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "eval": "node scripts/workflow-eval.mjs",
@@ -11,6 +12,9 @@
     "doctor": "node scripts/doctor.mjs",
     "handoff": "node scripts/handoff.mjs",
     "health": "node scripts/health-check.mjs",
+    "mcp:install": "node scripts/install-host-mcps.mjs",
+    "mcp:versions": "node scripts/mcp-versions.mjs",
+    "mcp:update": "node scripts/update-mcps.mjs",
     "setup": "./setup.sh",
     "teardown": "./teardown.sh"
   },

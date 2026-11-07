@@ -16,6 +16,7 @@
 #   8. Print summary
 
 set -euo pipefail
+umask 077
 
 resolve_symlink() {
   local target="$1"
@@ -55,6 +56,16 @@ for arg in "$@"; do
     *)           warn "Unknown option: $arg"; show_help ;;
   esac
 done
+
+# Existing unsupported runtimes must fail before symlinks or configs change.
+if command -v node >/dev/null 2>&1; then
+  setup_node_version="$(node -p 'process.versions.node')"
+  IFS=. read -r setup_node_major setup_node_minor _ <<< "$setup_node_version"
+  if (( setup_node_major < 24 || (setup_node_major == 24 && setup_node_minor < 15) )); then
+    err "Node.js >=24.15.0 is required; found $setup_node_version. Upgrade Node before setup."
+    exit 1
+  fi
+fi
 
 ask_install() {
   local name=$1
@@ -142,13 +153,15 @@ source "$AGENTS_DIR/scripts/prerequisites.sh"
 PREREQ_EXIT=$?
 set -e
 if [ "$PREREQ_EXIT" -ne 0 ]; then
-  warn "Some prerequisites failed (exit $PREREQ_EXIT) — continuing with available tools"
+  err "Prerequisites failed (exit $PREREQ_EXIT); no configuration sync was run"
+  exit "$PREREQ_EXIT"
 fi
 
 # ─── Step 2: Secrets ─────────────────────────────────────────────────────────
 section "2 / 7  Secrets"
 if [ ! -f "$AGENTS_DIR/secrets.env" ]; then
   cp "$AGENTS_DIR/secrets.env.example" "$AGENTS_DIR/secrets.env"
+  chmod 600 "$AGENTS_DIR/secrets.env"
   warn "secrets.env created from template"
   info "Fill in your API keys: $AGENTS_DIR/secrets.env"
   info "Then re-run setup.sh for MCP configs to include real values."
@@ -365,7 +378,7 @@ echo "  Skills:       ~/.agents/skills/ (symlinked to AGY, Cursor, Codex, Claude
 echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Kilo, Cursor plugin, Claude Code, Cline)"
 echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex, Kilo, Cline, Claude Code"
 echo "  RTK:          hook (Cursor, Claude Code), plugin (OpenCode), RTK.md (Codex, Kilo), rules (AGY, Cline)"
-echo "  Context-mode: hooks (Cursor, AGY), plugin (OpenCode, Codex), native (Kilo)"
+echo "  Context-mode: MCP compatibility mode (AGY), native adapters (Codex, OpenCode); other adapters require verification"
 echo "  Herdr:        sessionStart hooks (Cursor, Codex)"
 echo ""
 echo "  When you add a new MCP server:"
@@ -377,8 +390,5 @@ echo "  On a new machine:"
 echo -e "  ${DIM}git clone <your-dotfiles-repo> ~/.agents && ~/.agents/setup.sh${NC}"
 echo ""
 
-if has npm; then
-  echo -e "${BOLD}━━ Health Check ━━${NC}"
-  (cd "$AGENTS_DIR" && npm run health)
-fi
+echo "Run npm run doctor for static checks, or npm run health for live MCP handshakes."
 echo ""

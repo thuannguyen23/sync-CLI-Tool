@@ -85,6 +85,27 @@ test('AGY merges personal MCP servers and preserves unrelated settings', t => {
   assert.equal(after.mcpServers.audit.command, '/bin/true');
 });
 
+test('optional MCP is registered only after its required credential is filled', t => {
+  const f=fixture(t,['AGY']);delete f.env.MCP_FIXTURE_TOKEN;
+  f.write(join(f.home,'.agents/mcp/servers.json'),{servers:{optional:{command:['/bin/true'],env:{TOKEN:'${MCP_FIXTURE_TOKEN}'},requiredSecrets:['MCP_FIXTURE_TOKEN']}}});
+  const secrets=join(f.home,'.agents/secrets.env'), config=join(f.home,'.gemini/config/mcp_config.json');
+  f.write(secrets,'MCP_FIXTURE_TOKEN=""\n');let r=f.run('sync-mcp.mjs');assert.equal(r.status,0,r.stderr);
+  assert.equal(JSON.parse(readFileSync(config)).mcpServers.optional,undefined);
+  f.write(secrets,'MCP_FIXTURE_TOKEN="fixture"\n');r=f.run('sync-mcp.mjs');assert.equal(r.status,0,r.stderr);
+  assert.equal(JSON.parse(readFileSync(config)).mcpServers.optional.env.TOKEN,'fixture');
+  const before=readFileSync(config,'utf8');f.write(secrets,'MCP_FIXTURE_TOKEN=\n');r=f.run('sync-mcp.mjs');
+  assert.notEqual(r.status,0);assert.match(r.stderr,/existing.*optional/i);assert.equal(readFileSync(config,'utf8'),before);
+});
+
+test('OpenCode detects a stale optional MCP at root alongside nested servers', t => {
+  const f=fixture(t,['OPENCODE']); delete f.env.MCP_FIXTURE_TOKEN;
+  f.write(join(f.home,'.agents/mcp/servers.json'),{servers:{optional:{command:['/bin/true'],requiredSecrets:['MCP_FIXTURE_TOKEN']}}});
+  const config=join(f.home,'.config/opencode/opencode.json');
+  f.write(config,{mcp:{servers:{},optional:{type:'local',command:['old']}}});
+  const before=readFileSync(config,'utf8'),r=f.run('sync-mcp.mjs');
+  assert.notEqual(r.status,0); assert.equal(readFileSync(config,'utf8'),before);
+});
+
 test('OpenCode refuses malformed config without changing it or its backup', t => {
   const f = fixture(t, ['OPENCODE']);
   const config = join(f.home, '.config/opencode/opencode.json');
@@ -114,6 +135,14 @@ test('OpenCode preserves JSONC strings, settings, personal servers, and the firs
   assert.ok(after.mcp.servers.audit);
   assert.equal(readFileSync(config + '.bak', 'utf8'), original);
   assert.equal(existsSync(join(f.home, '.config/opencode/opencode.json')), false);
+});
+
+test('OpenCode MCP sync preserves plugins from both supported plugin arrays', t => {
+  const f=fixture(t,['OPENCODE']);const config=join(f.home,'.config/opencode/opencode.json');
+  f.write(config,{plugin:['/fixture/context-mode'],plugins:[],mcp:{'context-mode':{type:'local',command:['/fixture/context-mode']},servers:{}}});
+  const r=f.run('sync-mcp.mjs');assert.equal(r.status,0,r.stderr);
+  const d=JSON.parse(readFileSync(config));assert.ok(d.plugin.includes('/fixture/context-mode'));assert.ok(d.plugins.includes('/fixture/context-mode'));
+  assert.deepEqual(d.mcp['context-mode'].command,['/fixture/context-mode']);
 });
 
 test('rules respect opt-out without creating agent configuration', t => {
@@ -231,8 +260,9 @@ test('Codex installs native context-mode hooks and MCP without a marketplace plu
 
 test('OpenCode registers native context-mode MCP while preserving personal configuration', t => {
   const f = fixture(t, ['OPENCODE']);
+  f.write(join(f.bin, 'npm'), '#!/bin/sh\necho "' + join(f.home, 'npm') + '"\n');
   f.write(join(f.bin, 'context-mode'), '#!/bin/sh\nexit 0\n');
-  spawnSync('chmod', ['+x', join(f.bin, 'context-mode')]);
+  spawnSync('chmod', ['+x', join(f.bin, 'npm'), join(f.bin, 'context-mode')]);
   const config = join(f.home, '.config/opencode/opencode.json');
   f.write(config, { model: 'keep', mcp: { servers: { personal: { type: 'local', command: ['true'] } } } });
   const result = f.run('sync-hooks.mjs');
@@ -241,4 +271,44 @@ test('OpenCode registers native context-mode MCP while preserving personal confi
   assert.equal(actual.model, 'keep');
   assert.deepEqual(actual.mcp.servers.personal.command, ['true']);
   assert.deepEqual(actual.mcp.servers['context-mode'].command, [join(f.bin, 'context-mode')]);
+});
+
+test('OpenCode launches context-mode v2 as an MCP server', t => {
+  const f = fixture(t, ['OPENCODE']);
+  const pkg = join(f.home, 'npm/context-mode');
+  f.write(join(pkg, 'package.json'), {version:'2.1.5'}); f.write(join(pkg,'server.mjs'),'');
+  f.write(join(f.bin, 'npm'), '#!/bin/sh\necho "' + join(f.home, 'npm') + '"\n');
+  f.write(join(f.bin, 'context-mode'), '#!/bin/sh\nexit 0\n');
+  spawnSync('chmod', ['+x', join(f.bin, 'npm'), join(f.bin, 'context-mode')]);
+  const config = join(f.home, '.config/opencode/opencode.json');
+  f.write(config, {plugin:['context-mode'],mcp:{servers:{'context-mode':{type:'local',command:['old']}}}});
+  const result = f.run('sync-hooks.mjs'); assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(config)).mcp['context-mode'].command,[process.execPath,join(pkg,'server.mjs'),'--agent','opencode']);
+  assert.equal(JSON.parse(readFileSync(config)).mcp.servers['context-mode'],undefined);
+  assert.deepEqual(JSON.parse(readFileSync(config)).plugin,['context-mode']);
+});
+
+test('AGY registers context-mode v2 directly and preserves other MCP entries', t => {
+  const f = fixture(t, ['AGY']); const pkg=join(f.home,'npm/context-mode');
+  f.write(join(pkg,'package.json'),{version:'2.1.5'});
+  f.write(join(f.bin,'npm'),'#!/bin/sh\necho "'+join(f.home,'npm')+'"\n');
+  f.write(join(f.bin,'context-mode'),'#!/bin/sh\nexit 0\n');
+  spawnSync('chmod',['+x',join(f.bin,'npm'),join(f.bin,'context-mode')]);
+  f.write(join(f.bin,'agy'),'#!/bin/sh\n[ "$1 $2 $3" = "plugin disable context-mode" ] || exit 2\nprintf disabled > "$HOME/plugin-disabled"\n');spawnSync('chmod',['+x',join(f.bin,'agy')]);
+  f.write(join(f.home,'.gemini/config/plugins/context-mode/plugin.json'),{name:'context-mode',version:'1.0.169'});
+  const config=join(f.home,'.gemini/antigravity-cli/mcp_config.json');
+  f.write(config,{mcpServers:{'context-mode':{command:'context-mode'},personal:{command:'other'}}});
+  const r=f.run('sync-hooks.mjs');assert.equal(r.status,0,r.stderr);
+  const d=JSON.parse(readFileSync(config));assert.equal(d.mcpServers['context-mode'].command,process.execPath);assert.deepEqual(d.mcpServers['context-mode'].args,[join(pkg,'server.mjs'),'--agent','gemini']);assert.equal(d.mcpServers.personal.command,'other');
+  assert.equal(readFileSync(join(f.home,'plugin-disabled'),'utf8'),'disabled');
+});
+
+test('Codex never exposes resolved credentials in CLI arguments', t => {
+  const f=fixture(t,['CODEX']),token='fixture-secret-DoNotExpose';
+  f.write(join(f.home,'.agents/mcp/servers.json'),{servers:{private:{command:['true'],env:{TOKEN:'${PRIVATE_SYNC_FIXTURE}'}}}});
+  f.write(join(f.home,'.agents/secrets.env'),'PRIVATE_SYNC_FIXTURE="'+token+'"\n');
+  f.write(join(f.bin,'codex'),`#!${process.execPath}\nconst fs=require('fs');const args=process.argv.slice(2);fs.appendFileSync(process.env.HOME+'/argv.jsonl',JSON.stringify(args)+'\\n');if(args[1]==='add'){let env='';for(let i=0;i<args.length;i++){if(args[i]==='--env'){const [k,...v]=args[++i].split('=');env+=k+' = '+JSON.stringify(v.join('='))+'\\n';}}fs.writeFileSync(process.env.CODEX_HOME+'/config.toml','[mcp_servers.private]\\ncommand = "true"\\n[mcp_servers.private.env]\\n'+env);}\n`);
+  spawnSync('chmod',['+x',join(f.bin,'codex')]);const r=f.run('sync-mcp.mjs');assert.equal(r.status,0,r.stderr);
+  assert.equal(readFileSync(join(f.home,'argv.jsonl'),'utf8').includes(token),false);
+  assert.match(readFileSync(join(f.profile,'config.toml'),'utf8'),new RegExp(token));
 });

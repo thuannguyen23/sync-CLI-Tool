@@ -1,4 +1,4 @@
-import { copyFileSync, constants, existsSync, readFileSync } from 'node:fs';
+import { copyFileSync, constants, existsSync, readFileSync, chmodSync, lstatSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -21,6 +21,7 @@ export function backupFile(file) {
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
   }
+  if (lstatSync(file + '.bak').isFile()) chmodSync(file + '.bak', 0o600);
 }
 
 // Remove JSONC comments and trailing commas without touching quoted strings.

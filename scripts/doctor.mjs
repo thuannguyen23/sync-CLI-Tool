@@ -10,6 +10,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
+import { loadSecrets, prepareServer } from './mcp-runtime.mjs';
 
 const home = homedir();
 const agentsDir = join(home, '.agents');
@@ -49,9 +50,16 @@ function inspectMcp() {
     return;
   }
 
+  const secrets = loadSecrets(join(agentsDir, 'secrets.env'));
   for (const [name, server] of Object.entries(servers)) {
     if (!server || typeof server !== 'object' || Array.isArray(server)) {
       report('ERROR', `MCP ${name}`, 'Server configuration must be an object');
+      continue;
+    }
+
+    const prepared = prepareServer(server, secrets);
+    if (prepared.status !== 'READY') {
+      report(prepared.status, `MCP ${name}`, prepared.detail);
       continue;
     }
 
@@ -228,7 +236,8 @@ function inspectHooks() {
       ['context-mode', 'context-mode hook'],
     ]) {
       if (name === 'Codex' && label === 'RTK') continue;
-      const found = commands.some(command => command.includes(identifier));
+      const found = commands.some(command => command.includes(identifier) ||
+        (label === 'context-mode' && /context-mode.*[\/]hook\.mjs\b/.test(command)));
       report(
         'UNVERIFIED',
         `${name} ${label}`,

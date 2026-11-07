@@ -31,7 +31,7 @@ However, multi-agent workflows suffer from severe fragmentation:
 
 ### 1. Pre-configured MCP Servers Catalog (`mcp/servers.json`)
 
-The repository includes ready-to-use, production-tested MCP server configurations:
+The repository includes MCP server definitions. Runtime availability depends on installed dependencies and configured credentials:
 
 | MCP Server | Protocol / Transport | Description |
 | :--- | :--- | :--- |
@@ -40,8 +40,10 @@ The repository includes ready-to-use, production-tested MCP server configuration
 | **`sequential-thinking`**| Stdio (`npx @modelcontextprotocol/server-sequential-thinking`) | Multi-turn dynamic chain-of-thought and step-by-step hypothesis validation for complex reasoning. |
 | **`web-search`** | Stdio (`npx @zhafron/mcp-web-search`) | Fast, API-key-free web search powered by DuckDuckGo and Bing. |
 | **`agent-browser`** | Stdio (`npx @nxavis/agent-browser-mcp`) | Headless browser automation designed specifically for autonomous token-efficient agent browsing. |
-| **`github`** | Stdio (`npx @modelcontextprotocol/server-github`) | GitHub repository management, issues, PR reviews, branches, and commit inspection. |
-| **`obsidian`** | Remote HTTP / SSE | Connects the agent directly to your personal Obsidian knowledge vault via secure token authentication. |
+| **`github`** | Stdio (official `github-mcp-server`, via `gh` authentication) | GitHub repository management, issues, PR reviews, branches, and commit inspection. |
+| **`slack`** | Stdio (`slack-mcp`) | Slack tools; enabled when `SLACK_BOT_TOKEN` is set. |
+| **`telegram`** | Stdio (host-built `telegram-api-mcp`) | Telegram tools; enabled when `TELEGRAM_BOT_TOKEN` is set. |
+| **`obsidian-vault`** | Stdio (`obsidian-mcp serve --vault`) | Local filesystem access to the configured Obsidian vault. |
 | **`mysql-local-ecb`** | Stdio (`uvx mysql-mcp-server`) | Local MySQL development database integration (schema inspection, queries, samples). |
 | **`mysql-develop-ecb`**| Stdio (`uvx mysql-mcp-server`) | Remote staging/develop MySQL database integration. |
 | **`mysql-remote-jcf`** | Stdio (`uvx mysql-mcp-server`) | Remote production MySQL database integration with enforced SSL. |
@@ -124,7 +126,11 @@ cp ~/.agents/secrets.env.example ~/.agents/secrets.env
 nano ~/.agents/secrets.env          # Fill in your API keys
 ~/.agents/setup.sh
 ```
-`setup.sh` automatically checks and installs all prerequisites (`nvm/node`, `uv/uvx`, `rtk`, `codegraph`, `context-mode`, `agent-browser`), sets up directory symlinks, configures hooks, and converts MCP server definitions for all detected tools. Pass `-s` or `--silent` for automated non-interactive runs.
+`setup.sh` checks common prerequisites, sets up directory symlinks, configures hooks, and converts MCP definitions for detected tools. Pass `-s` or `--silent` for automated non-interactive runs. Node.js 24.15 or newer is required. Existing older runtimes are rejected before configuration changes. Prerequisite failures stop setup.
+
+`setup.sh` installs missing host servers through `scripts/install-host-mcps.mjs`. GitHub uses the official release binary with SHA-256 verification and requires `gh` plus `gh auth login` (Ubuntu: `sudo apt install gh`). Slack uses `uv tool install git+https://github.com/redhat-community-ai-tools/slack-mcp`. Telegram builds upstream source with `npm ci` and `npm run build` before replacing the host checkout. Put bot tokens in `~/.agents/secrets.env`; blank optional credentials skip registration. Provider credentials are never included in the Codex registration command arguments, and generated JSON MCP configs and backups are private files.
+
+Context-mode 2.x requires Node.js 24.15 or newer and serves Codex and OpenCode. AGY can use its MCP server through a Gemini compatibility setting, but this is not upstream-supported for AGY and does not provide AGY hooks. Sync disables the installed legacy context-mode AGY plugin through `agy plugin disable context-mode` before registering 2.x MCP, preserving other plugins. This compatibility mode supplies MCP tools, without AGY context-mode lifecycle hooks.
 
 ### 2. Adding a New MCP Server
 ```bash
@@ -137,7 +143,7 @@ To sync everything (skills, rules, MCPs, and hooks) in one command, simply run `
 ### 3. Verification & Health Checks
 Test live MCP server connections, inspect configuration, or run the test suite:
 ```bash
-npm run health  # Ping all 11 MCP servers and verify tools/list JSON-RPC handshake
+npm run health  # MCP initialize, initialized notification and tools/list; no DB tool calls
 npm run doctor  # Inspect MCP configuration, skill links, and supported hook files
 npm test        # Run unit tests across all sync modules
 ```
@@ -149,9 +155,18 @@ and that a directly invoked, absolute Python script path is a regular file.
 A missing matcher applies to all tools. Relative paths, shell wrappers, variable
 expansion, and complex quoting remain unverified; commands are never executed.
 Other hook adapters retain configuration-only inspection.
-The existing `npm run health`
-command can start configured MCP processes and call MySQL tools; its HTTP branch
-does not test connectivity.
+`npm run health` starts configured servers with bounded concurrency, checks stdio and Streamable HTTP handshakes, and exits nonzero on failed or unconfigured servers. Optional integrations without credentials are reported as SKIPPED. Legacy SSE is UNVERIFIED. Add `-- --mysql` explicitly to call `get_schema_info`; it is never called by setup. `npm run doctor` also reports missing inputs and recognizes native context-mode v2 hook commands; it remains a static check.
+
+```bash
+npm run health -- --server github
+npm run health -- --json
+npm run mcp:install -- --dry-run # Show missing host components
+npm run mcp:versions             # Registry versions and installed/cache evidence; no installation
+npm run mcp:update -- --dry-run  # Review exact update commands
+npm run mcp:update               # Upgrade host packages, refresh caches, then sync MCP and hooks
+```
+
+Updates are explicit, not a background service. npm MCP entries request `@latest`; the updater refreshes npm and Python environments and rebuilds Telegram source. A failed update stops later steps; earlier package changes are not rolled back automatically. Telegram builds are replaced only after success and the previous checkout is retained as a backup. Restart agent sessions after updating. Version inspection does not prove which cached package an existing session has loaded.
 
 ### Workflow Evaluation
 
@@ -212,7 +227,11 @@ incomplete task. Verification results in the notes are historical claims; rerun
 checks when needed. Creating a handoff does not grant permission for other actions.
 
 ### 5. Clean Uninstallation
-To cleanly revert all symlinks and restore your original IDE settings from backups:
+From the repository directory, remove owned links or explicitly restore backups:
 ```bash
-~/.agents/teardown.sh
+./teardown.sh
+# Alternative: restore .bak files while saving each current config first
+./teardown.sh --restore-backups
 ```
+
+Teardown removes only repository-owned links. Regular configs, MCP registrations, installed plugins and packages remain unless an explicit backup restore is requested. Saved files use a `.before-teardown.*` suffix. `npm run test:teardown` runs isolated fixture tests and never runs setup against your real HOME.

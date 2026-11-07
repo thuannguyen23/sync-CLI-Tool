@@ -98,7 +98,7 @@ test('rejects invalid measurements and stale checker metadata', t => {
 test('source-anchor drift fails preparation and removes only the newly created run', async t => {
   const f = fixture(t);
   const source = join(f.root, 'changed-source');
-  const paths = ['scripts/workflow-eval.mjs', 'scripts/doctor.mjs', 'scripts/sync-mcp.mjs', 'scripts/config-utils.mjs', 'tests/doctor.test.mjs', 'tests/sync-safety.test.mjs'];
+  const paths = ['scripts/workflow-eval.mjs', 'scripts/doctor.mjs', 'scripts/mcp-runtime.mjs', 'scripts/sync-mcp.mjs', 'scripts/config-utils.mjs', 'tests/doctor.test.mjs', 'tests/sync-safety.test.mjs'];
   for (const path of paths) {
     mkdirSync(dirname(join(source, path)), { recursive: true });
     copyFileSync(new URL('../' + path, import.meta.url), join(source, path));
