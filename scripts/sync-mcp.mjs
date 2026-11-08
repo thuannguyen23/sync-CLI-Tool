@@ -85,6 +85,10 @@ try {
 
   // Basic structural validation for each server
   for (const [name, config] of Object.entries(servers)) {
+    if (name.startsWith('_') || name.startsWith('//') || config.disabled === true) {
+      delete servers[name];
+      continue;
+    }
     if (!config.url && (!config.command || !Array.isArray(config.command))) {
       err(
         `servers.json is invalid: Server '${name}' must have either a 'url' string or a 'command' array.`,
