@@ -172,6 +172,27 @@ npm run mcp:update               # Upgrade host packages, refresh caches, then s
 
 Updates are explicit, not a background service. npm MCP entries request `@latest`; the updater refreshes npm and Python environments and rebuilds Telegram source. A failed update stops later steps; earlier package changes are not rolled back automatically. Telegram builds are replaced only after success and the previous checkout is retained as a backup. Restart agent sessions after updating. Version inspection does not prove which cached package an existing session has loaded.
 
+OpenCode model execution is a separate, explicit check. It calls the configured
+model, creates an archived session on a private server, and requires a completed
+shell command plus the expected final answer. It stops on a provider retry or
+after the timeout. It does not prove arbitrary task quality or hook behavior.
+This mode uses `--auto` for the smoke session; the prompt requests only `printf`,
+but it is not an OS sandbox. Use trusted project instructions, plugins and
+models. Model usage may consume your provider quota.
+
+```bash
+npm run health -- --opencode --timeout-ms 60000 --json
+npm run health -- --opencode --model opencode/deepseek-v4.1-flash-free --json
+```
+
+Ordinary sync preserves your OpenCode model and providers. To explicitly select
+a model while syncing, use `SYNC_OPENCODE_MODEL=provider/model` with
+`node scripts/sync-mcp.mjs` and the usual `SKIP_*` switches. This changes only the
+top-level model; explicit per-agent model overrides remain separate. Free model
+availability is provider-dependent; inspect `opencode models` before choosing.
+OpenCode v2 plugins are written to `plugins` only, including after upstream
+context-mode setup. Doctor detects duplicate entries but never calls a model.
+
 ### Workflow Evaluation
 
 Prepare three disposable tasks, run your coding agent in fresh sessions, then
@@ -183,6 +204,14 @@ See [Workflow evaluation](docs/workflow-eval.md) for prepare, score, comparison,
 measurement provenance and the limits of the benchmark.
 
 ### 4. Task Handoff
+
+Keep one authoritative progress record per task (it may live in the approved
+plan). Record the current step, blockers, next action and evidence paths. Label
+evidence as configuration inspection, MCP handshake, isolated test, or actual
+agent session, and include the checked code/configuration version. Handoff is
+a snapshot pointing back to that record, not a second independently maintained
+task list. Do not mark runtime checks complete based on configuration or fixture
+results alone.
 Create a Markdown handoff for another coding agent working in the same repository.
 First write task notes with the goal, approved decisions, completed work, previous
 verification results, remaining steps, and constraints:

@@ -14,6 +14,20 @@ import { test } from 'node:test';
 
 const script = new URL('../scripts/doctor.mjs', import.meta.url);
 
+test('doctor reports duplicate OpenCode plugins and never claims model execution', t => {
+  const f = fixture(t);
+  writeFileSync(join(f.mcp, 'servers.json'), JSON.stringify({ servers: {} }));
+  const dir = join(f.home, '.config/opencode');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'opencode.json'), JSON.stringify({
+    model: 'opencode/test-free', plugin: ['/fixture/context-mode'], plugins: ['/fixture/context-mode'],
+  }));
+  const r = f.run();
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /\[ERROR\] OpenCode plugins: Duplicate/);
+  assert.match(r.stdout, /\[UNVERIFIED\] OpenCode model:.*health.*--opencode/);
+});
+
 test('doctor identifies missing inputs, optional skips and native v2 hooks without execution', t => {
   const f=fixture(t);
   writeFileSync(join(f.mcp,'servers.json'),JSON.stringify({servers:{optional:{command:['true'],requiredSecrets:['DOCTOR_OPTIONAL_FIXTURE']},database:{command:['true'],env:{HOST:'${DOCTOR_MISSING_FIXTURE}'}}}}));

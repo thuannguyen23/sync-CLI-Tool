@@ -11,6 +11,7 @@ import {
 import { homedir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { loadSecrets, prepareServer } from './mcp-runtime.mjs';
+import { openCodeConfigPath, readConfig } from './config-utils.mjs';
 
 const home = homedir();
 const agentsDir = join(home, '.agents');
@@ -258,9 +259,26 @@ function inspectHooks() {
   report('UNVERIFIED', 'Other clients', 'Hook adapters are not inspected by this version');
 }
 
+function inspectOpenCode() {
+  try {
+    const file = openCodeConfigPath();
+    if (!existsSync(file)) return;
+    const config = readConfig(file);
+    const plugins = [...(config.plugins || []), ...(config.plugin || [])];
+    const duplicate = new Set(plugins.map(p => JSON.stringify(p))).size !== plugins.length;
+    report(duplicate ? 'ERROR' : 'OK', 'OpenCode plugins', duplicate
+      ? 'Duplicate plugin entries across plugin/plugins; normalize after context-mode setup'
+      : 'No duplicate plugin entries');
+    report('UNVERIFIED', 'OpenCode model', 'Execution not tested. Run npm run health -- --opencode (explicit model call)');
+  } catch {
+    report('ERROR', 'OpenCode config', 'Cannot read an unambiguous valid configuration');
+  }
+}
+
 inspectMcp();
 inspectSkills();
 inspectHooks();
+inspectOpenCode();
 
 for (const { status, subject, detail } of results) {
   console.log(`[${status}] ${subject}: ${detail}`);

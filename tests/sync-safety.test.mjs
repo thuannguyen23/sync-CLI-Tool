@@ -50,10 +50,67 @@ if (args[1] === 'remove') { text = ''; }
 if (args[1] === 'add') {
   text += '\\n[mcp_servers.' + args[2] + ']\\nurl = "https://example.invalid/mcp"\\n';
 }
+
 fs.writeFileSync(file, text);
 `, { mode: 0o755 });
 }
 
+test('OpenCode model selection is explicit and survives later syncs without duplicate plugin keys', t => {
+  const f = fixture(t, ['OPENCODE']);
+  const file = join(f.home, '.config/opencode/opencode.json');
+  const provider = { personal: { options: { baseURL: 'http://127.0.0.1:1234' } } };
+  f.write(file, { model: 'personal/original', provider, plugin: ['personal-plugin'], plugins: ['personal-plugin'] });
+  f.env.SYNC_OPENCODE_MODEL = 'opencode/deepseek-v4.1-flash-free';
+  assert.equal(f.run('sync-mcp.mjs').status, 0);
+  delete f.env.SYNC_OPENCODE_MODEL;
+  assert.equal(f.run('sync-mcp.mjs').status, 0);
+  const result = JSON.parse(readFileSync(file));
+  assert.equal(result.model, 'opencode/deepseek-v4.1-flash-free');
+  assert.deepEqual(result.provider, provider);
+  assert.deepEqual(result.plugins, ['personal-plugin']);
+  assert.equal(Object.hasOwn(result, 'plugin'), false);
+});
+
+test('OpenCode rejects an invalid explicit model without replacing the config', t => {
+  const f = fixture(t, ['OPENCODE']);
+  const file = join(f.home, '.config/opencode/opencode.json');
+  f.write(file, { model: 'personal/original' });
+  const before = readFileSync(file, 'utf8');
+  f.env.SYNC_OPENCODE_MODEL = 'invalid model';
+  assert.notEqual(f.run('sync-mcp.mjs').status, 0);
+  assert.equal(readFileSync(file, 'utf8'), before);
+});
+
+test('OpenCode canonicalizes upstream setup output on every hook sync', t => {
+  const f = fixture(t, ['OPENCODE']);
+  const pkg = join(f.home, 'npm/context-mode');
+  const file = join(f.home, '.config/opencode/opencode.json');
+  f.write(join(pkg, 'package.json'), { version: '2.1.10' });
+  f.write(join(pkg, 'server.mjs'), '');
+  f.write(join(f.bin, 'npm'), '#!/bin/sh\necho "' + join(f.home, 'npm') + '"\n');
+  f.write(join(f.bin, 'context-mode'), `#!${process.execPath}
+const fs=require('node:fs'),path=require('node:path');
+const file=path.join(process.env.HOME,'.config/opencode/opencode.json');
+const d=JSON.parse(fs.readFileSync(file));
+d.plugin=[...(d.plugin||[]),${JSON.stringify(pkg)}];
+d.mcp['context-mode']={type:'local',command:['legacy'],enabled:true};
+fs.writeFileSync(file,JSON.stringify(d));
+`);
+  spawnSync('chmod', ['+x', join(f.bin, 'npm'), join(f.bin, 'context-mode')]);
+  f.write(file, { model: 'personal/model', custom: true, plugins: ['personal'], mcp: { servers: { personal: { command: ['true'] } } } });
+  for (let i = 0; i < 2; i++) {
+    const r = f.run('sync-hooks.mjs');
+    assert.equal(r.status, 0, r.stderr);
+    const d = JSON.parse(readFileSync(file));
+    assert.equal(d.model, 'personal/model');
+    assert.equal(d.custom, true);
+    assert.deepEqual(d.plugins, ['personal', pkg]);
+    assert.equal(Object.hasOwn(d, 'plugin'), false);
+    assert.equal(Object.hasOwn(d.mcp, 'context-mode'), false);
+    assert.deepEqual(d.mcp.servers.personal.command, ['true']);
+    assert.ok(d.mcp.servers['context-mode'].command.includes(join(pkg, 'server.mjs')));
+  }
+});
 test('Codex preserves personal MCP servers and writes headers into CODEX_HOME', t => {
   const f = fixture(t, ['CODEX']);
   codexBinary(f);
@@ -141,7 +198,7 @@ test('OpenCode MCP sync preserves plugins from both supported plugin arrays', t 
   const f=fixture(t,['OPENCODE']);const config=join(f.home,'.config/opencode/opencode.json');
   f.write(config,{plugin:['/fixture/context-mode'],plugins:[],mcp:{'context-mode':{type:'local',command:['/fixture/context-mode']},servers:{}}});
   const r=f.run('sync-mcp.mjs');assert.equal(r.status,0,r.stderr);
-  const d=JSON.parse(readFileSync(config));assert.ok(d.plugin.includes('/fixture/context-mode'));assert.ok(d.plugins.includes('/fixture/context-mode'));
+  const d=JSON.parse(readFileSync(config));assert.equal(Object.hasOwn(d,'plugin'),false);assert.ok(d.plugins.includes('/fixture/context-mode'));
   assert.deepEqual(d.mcp['context-mode'].command,['/fixture/context-mode']);
 });
 

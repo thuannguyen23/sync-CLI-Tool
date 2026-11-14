@@ -182,6 +182,8 @@ For testable production changes, use TDD: write the failing test, run it and ver
 ## 10. Progress and Communication
 
 - Maintain one authoritative plan and progress record for the scope. Mark tasks complete only after their checks pass; resume rather than restart after interruptions or compaction.
+- Record the current step, blockers, next action and evidence paths in that progress record. A handoff references the record and captures a snapshot; it does not create a competing task list.
+- Label verification evidence by what ran: configuration inspection, MCP handshake, isolated test, or actual agent session. Record the checked version; a model response alone does not prove a tool ran, and tool success does not prove task quality or cost savings.
 - Communicate the result, supporting evidence, and next necessary action concisely. Avoid filler, repeated plans, explanations of obvious concepts, and unnecessary apologies.
 - Ask only for missing decisions or required approvals. State the concrete reason and source of an approval requirement; do not treat silence or elapsed time as consent.
 - Final reports identify the changes, checks actually run, material limits, and any action still requiring approval. Never imply a full model/CLI compatibility or speed benchmark from static checks.

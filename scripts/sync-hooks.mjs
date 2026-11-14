@@ -605,6 +605,18 @@ function syncOpenCode() {
       execFileSync('context-mode', ['setup', '--yes', '--agents', 'opencode'], {
         stdio: 'pipe', timeout: 120_000,
       })
+      // Upstream setup may write the v1 aliases. Normalize its final output,
+      // retaining any unrelated settings it added during setup.
+      const installed = readJSON(configPath)
+      installed.plugins = [...new Set([...(installed.plugins || []), ...(installed.plugin || [])])]
+        .filter(p => typeof p !== 'string' || !/(^context-mode(?:@.*)?$|(?:^|\/)context-mode(?:\/)?$)/.test(p))
+      installed.plugins.push(ctxPkgDir)
+      delete installed.plugin
+      installed.mcp ||= {}
+      installed.mcp.servers ||= {}
+      installed.mcp.servers['context-mode'] = config.mcp.servers['context-mode']
+      delete installed.mcp['context-mode']
+      writeJSON(configPath, installed)
     }
     ok('OpenCode context-mode native MCP registered')
   }

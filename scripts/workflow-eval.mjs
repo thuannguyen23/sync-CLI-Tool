@@ -17,7 +17,7 @@ const json = path => JSON.parse(readFileSync(path, 'utf8'));
 const usage = 'Usage: workflow-eval.mjs prepare --output DIR --label LABEL --instructions FILE | score --run DIR [--metrics FILE] | compare REPORT...';
 const cases = {
   'fix-bug': {
-    files: ['scripts/doctor.mjs', 'scripts/mcp-runtime.mjs', 'tests/doctor.test.mjs'],
+    files: ['scripts/doctor.mjs', 'scripts/mcp-runtime.mjs', 'scripts/config-utils.mjs', 'tests/doctor.test.mjs'],
     allowed: ['scripts/doctor.mjs', 'tests/doctor.test.mjs'],
     prompt: 'Repair Codex RTK diagnostics: reject wrong events and invalid matchers or script paths. Preserve configuration-only runtime reporting. Add or run regression tests. Do not execute hooks.',
   },
@@ -27,7 +27,7 @@ const cases = {
     prompt: 'Repair OpenCode MCP syncing so personal servers, unrelated settings, JSONC string values and the original backup survive two syncs. Use temporary HOME and skip all other clients. Run the relevant public tests with: node --test --test-name-pattern="OpenCode preserves JSONC|OpenCode refuses malformed" tests/sync-safety.test.mjs . Other copied tests reference scripts outside this task and are excluded. Do not connect to an MCP service.',
   },
   'resume-handoff': {
-    files: ['scripts/doctor.mjs', 'scripts/mcp-runtime.mjs', 'tests/doctor.test.mjs'],
+    files: ['scripts/doctor.mjs', 'scripts/mcp-runtime.mjs', 'scripts/config-utils.mjs', 'tests/doctor.test.mjs'],
     allowed: ['handoff-review.json'],
     prompt: 'Read HANDOFF.md, TASKS.md and the current source. Do not change code. Write handoff-review.json with stale (boolean), currentSourceHash (SHA256 of scripts/doctor.mjs), nextTask (task ID), checksToRerun (array of commands), and runtimeVerified (boolean). Identify the next unfinished task and evidence that needs refreshing; historical claims do not establish runtime verification.',
   },

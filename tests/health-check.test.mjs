@@ -6,6 +6,51 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 const script=new URL('../scripts/health-check.mjs',import.meta.url).pathname;
+
+function runtimeFixture(t, body) {
+ const f=fixture(t,'');const bin=join(f.home,'bin');mkdirSync(bin);
+ if(body!==null)writeFileSync(join(bin,'opencode'),`#!${process.execPath}\n${body}`,{mode:0o755});
+ return {run:args=>new Promise(resolve=>{
+  const p=spawn(process.execPath,[script,'--opencode','--json','--timeout-ms','500',...(args||[])],{env:{...process.env,HOME:f.home,PATH:body===null?bin:bin+':'+process.env.PATH}});
+  let out='',err='';p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>err+=d);p.on('exit',status=>resolve({status,out,err}));
+ })};
+}
+const runtimeSuccess=`const marker='SYNC_CLI_OPENCODE_RUNTIME_OK';
+console.log(JSON.stringify({type:'tool_use',sessionID:'fixture',part:{type:'tool',tool:'shell',state:{status:'completed',input:{command:'printf '+marker},output:marker,metadata:{metadata:{exit:0}}}}}));
+console.log(JSON.stringify({type:'text',sessionID:'fixture',part:{type:'text',text:marker}}));`;
+
+test('OpenCode runtime health requires real shell evidence and an archived private session',async t=>{
+ const f=runtimeFixture(t,`const a=process.argv.slice(2);if(!a.includes('--standalone')||!a.includes('--archived')||a[a.indexOf('--model')+1]!=='opencode/test-free')process.exit(3);\n`+runtimeSuccess);
+ const r=await f.run(['--model','opencode/test-free']);assert.equal(r.status,0,r.err);
+ const d=JSON.parse(r.out).results[0];assert.equal(d.status,'PASS');assert.equal(d.model,'opencode/test-free');assert.equal(d.sessionID,'fixture');
+});
+test('OpenCode runtime does not accept a final answer without a successful tool call',async t=>{
+ const f=runtimeFixture(t,`console.log(JSON.stringify({type:'text',part:{text:'SYNC_CLI_OPENCODE_RUNTIME_OK'}}));`);
+ const r=await f.run();assert.equal(r.status,1);assert.equal(JSON.parse(r.out).results[0].status,'ERROR');
+});
+test('OpenCode runtime rejects a failed shell even if the model claims success',async t=>{
+ const f=runtimeFixture(t,runtimeSuccess.replace('exit:0','exit:1'));
+ assert.equal((await f.run()).status,1);
+});
+test('OpenCode runtime stops provider retries and does not leak their messages',async t=>{
+ const f=runtimeFixture(t,`console.log(JSON.stringify({type:'retry',error:{type:'provider.transport',message:'secret-fixture-token'}}));setInterval(()=>{},1000);`);
+ const r=await f.run();assert.equal(r.status,1);assert.match(JSON.parse(r.out).results[0].detail,/provider/i);assert.doesNotMatch(r.out+r.err,/secret-fixture-token/);
+});
+test('OpenCode runtime times out instead of waiting indefinitely for the agent',async t=>{
+ const f=runtimeFixture(t,'setInterval(()=>{},1000)');const r=await f.run();assert.equal(r.status,1);assert.match(JSON.parse(r.out).results[0].detail,/timed out/i);
+});
+test('OpenCode runtime rejects malformed output and cannot combine with MCP checks',async t=>{
+ const f=runtimeFixture(t,`console.log('not-json')`);assert.equal((await f.run()).status,1);
+ assert.notEqual((await f.run(['--server','fixture'])).status,0);
+});
+test('OpenCode runtime reports a missing CLI without trying a real agent',async t=>{
+ const f=runtimeFixture(t,null);const r=await f.run();assert.equal(r.status,1);assert.match(JSON.parse(r.out).results[0].detail,/CLI is installed/);
+});
+test('OpenCode runtime rejects mismatched tool commands and non-object events',async t=>{
+ const f=runtimeFixture(t,runtimeSuccess.replace("input:{command:'printf '+marker}","input:{command:'echo '+marker}"));
+ assert.equal((await f.run()).status,1);
+ const malformed=runtimeFixture(t,`console.log('null')`);const r=await malformed.run();assert.equal(r.status,1);assert.equal(JSON.parse(r.out).results[0].status,'ERROR');
+});
 function fixture(t, code, extra={}) {
  const home=mkdtempSync(join(tmpdir(),'health-fixture-'));t.after(()=>rmSync(home,{recursive:true,force:true}));
  mkdirSync(join(home,'.agents/mcp'),{recursive:true});

@@ -226,6 +226,10 @@ function buildCursor() {
 function buildOpenCode() {
   const opencodeFile = openCodeConfigPath();
   const existing = readConfig(opencodeFile);
+  const model = process.env.SYNC_OPENCODE_MODEL;
+  if (model !== undefined && !/^[^\s/]+\/\S+$/.test(model)) {
+    throw new Error('SYNC_OPENCODE_MODEL must be provider/model');
+  }
 
   const mcpServers = {};
   for (const [name, server] of Object.entries(servers)) {
@@ -283,12 +287,14 @@ function buildOpenCode() {
     },
   };
 
+  // OpenCode v2 concatenates the legacy and native arrays when resolving config.
+  const { plugin: legacyPlugin, ...preserved } = existing;
   return {
-    ...existing,
+    ...preserved,
+    ...(model !== undefined ? { model } : {}),
     $schema: "https://opencode.ai/v2/config.json",
     instructions,
     plugins,
-    plugin: plugins,
     mcp,
   };
 }

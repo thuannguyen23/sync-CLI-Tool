@@ -5,13 +5,63 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { loadSecrets,prepareServer,publicError } from './mcp-runtime.mjs';
 const args=process.argv.slice(2),json=args.includes('--json'),mysql=args.includes('--mysql');
-let timeout=8000,selected;
+const opencode=args.includes('--opencode');
+let timeout=opencode?60000:8000,selected,model;
 for(let i=0;i<args.length;i++) {
   if(args[i]==='--timeout-ms')timeout=Number(args[++i]);
   else if(args[i]==='--server')selected=args[++i];
-  else if(!['--json','--mysql'].includes(args[i]))throw new Error(`Unknown health option: ${args[i]}`);
+  else if(args[i]==='--model'){model=args[++i];if(!model||!/^[^\s/]+\/\S+$/.test(model))throw new Error('model must be provider/model');}
+  else if(!['--json','--mysql','--opencode'].includes(args[i]))throw new Error(`Unknown health option: ${args[i]}`);
 }
 if(!Number.isInteger(timeout)||timeout<50||timeout>60000)throw new Error('timeout-ms must be between 50 and 60000');
+if(opencode&&(selected||mysql)||model&&!opencode)throw new Error('Use --opencode separately from MCP checks; --model requires --opencode');
+
+// This check is opt-in: it calls the selected model and creates an archived
+// session. A private server allows timeout/retry cleanup without interrupting
+// any of the user's other OpenCode sessions. No raw model output is printed.
+function checkOpenCode() {
+  const marker='SYNC_CLI_OPENCODE_RUNTIME_OK',command=`printf ${marker}`;
+  const prompt=`Read-only runtime check. Do not edit files or change configuration. Run exactly this shell command: ${command}. Then reply with exactly ${marker}. Do not inspect repository files or call other services.`;
+  const argv=['run','--standalone','--archived','--auto','--format','json','--title','sync-cli runtime check',...(model?['--model',model]:[]),prompt];
+  return new Promise(resolve=>{
+    const started=Date.now();let child,buffer='',bytes=0,tool=false,answer=false,sessionID,done=false,timer;
+    const signal=s=>{try{if(process.platform!=='win32')process.kill(-child.pid,s);else child.kill(s);}catch{}};
+    function finish(detail) {
+      if(done)return;done=true;clearTimeout(timer);
+      if(child?.pid){signal('SIGTERM');const kill=setTimeout(()=>signal('SIGKILL'),150);kill.unref();}
+      resolve({name:'opencode-runtime',status:detail?'ERROR':'PASS',model:model||'(configured default)',sessionID,elapsedMs:Date.now()-started,
+        detail:detail||'Model executed the shell marker and returned the expected answer'});
+    }
+    function event(line) {
+      if(!line.trim())return;
+      let e;try{e=JSON.parse(line);}catch{finish('Invalid OpenCode JSON output');return;}
+      if(!e||typeof e!=='object'||Array.isArray(e)){finish('Invalid OpenCode event');return;}
+      if(e.sessionID){if(sessionID&&sessionID!==e.sessionID){finish('Inconsistent OpenCode session');return;}sessionID=e.sessionID;}
+      if(e.type==='retry'||e.type==='error'){finish('OpenCode provider or runtime request failed; check model and provider');return;}
+      const p=e.part;
+      if(p?.type==='tool'&&p.tool==='shell'){
+        const s=p.state;
+        if(s?.status==='error'){finish('OpenCode shell tool failed');return;}
+        if(s?.status==='completed'&&s.input?.command===command&&typeof s.output==='string'&&s.output.trim()===marker&&
+          (s.metadata?.metadata?.exit??s.metadata?.exit)===0)tool=true;
+      }
+      if(e.type==='text'&&p?.text?.trim()===marker)answer=true;
+    }
+    try{child=spawn('opencode',argv,{stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});}
+    catch{finish('Could not start OpenCode');return;}
+    timer=setTimeout(()=>finish('OpenCode runtime check timed out'),timeout);
+    child.on('error',()=>finish('Could not start OpenCode; check that the CLI is installed'));
+    child.stderr.on('data',()=>{});
+    child.stdout.on('data',chunk=>{
+      if(done)return;bytes+=chunk.length;if(bytes>2*1024*1024){finish('OpenCode output exceeds limit');return;}
+      buffer+=chunk;const lines=buffer.split('\n');buffer=lines.pop();for(const line of lines){if(done)break;event(line);}
+    });
+    child.on('close',code=>{
+      if(done)return;if(buffer.trim())event(buffer);if(done)return;
+      finish(code===0&&tool&&answer?null:'OpenCode did not complete both the shell marker and final answer');
+    });
+  });
+}
 
 function rpcResult(message) {
   if(message?.jsonrpc!=='2.0'||Object.hasOwn(message,'method')||!Object.hasOwn(message,'result')||Object.hasOwn(message,'error'))throw new Error('Invalid MCP JSON-RPC response');
@@ -76,7 +126,12 @@ async function check(name,server,secrets){
     return {name,status:'PASS',version:init.serverInfo.version,tools,mysqlCall:mysql&&name.startsWith('mysql')};
   }catch(error){return {name,status:'ERROR',detail:publicError(error)};}finally{await transport?.close();}
 }
-try{
+if(opencode){
+  const result=await checkOpenCode();
+  if(json)console.log(JSON.stringify({results:[result]}));
+  else console.log(`[${result.status}] ${result.name}: ${result.detail}`);
+  if(result.status!=='PASS')process.exitCode=1;
+}else try{
   const root=join(homedir(),'.agents'),{servers}=JSON.parse(readFileSync(join(root,'mcp/servers.json'),'utf8'));
   if(selected&&!Object.hasOwn(servers,selected))throw new Error('Unknown server');
   const secrets=loadSecrets(join(root,'secrets.env')),results=[],entries=Object.entries(servers).filter(([name])=>!selected||name===selected);
