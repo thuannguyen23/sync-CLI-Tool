@@ -21,7 +21,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, existsSync,
-  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync, renameSync
+  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync, renameSync, mkdtempSync, rmSync
 } from 'fs'
 import { join, dirname } from 'path'
 import { execSync, execFileSync } from 'child_process'
@@ -476,6 +476,35 @@ function syncAgy(ctxPkgDir) {
 
 // ─── 3. Codex CLI ───────────────────────────────────────────────────────────
 
+// Upstream setup renders host-specific tool names into these command skills.
+// Detach directory symlinks first so its writes cannot reach canonical sources.
+function detachContextCommandSkills(skillsDir) {
+  for (const name of ['ctx-doctor', 'ctx-stats', 'ctx-upgrade']) {
+    const target = join(skillsDir, name)
+    let stat
+    try { stat = lstatSync(target) } catch (error) {
+      if (error.code === 'ENOENT') continue
+      throw error
+    }
+    if (!stat.isSymbolicLink()) continue
+    const source = realpathSync(target)
+    const staged = mkdtempSync(join(skillsDir, `.${name}-sync-`))
+    try {
+      cpSync(source, staged, { recursive: true, dereference: true })
+      unlinkSync(target)
+      renameSync(staged, target)
+    } catch (error) {
+      // Restore the link if replacement failed after unlinking it.
+      try { lstatSync(target) } catch (missing) {
+        if (missing.code === 'ENOENT') symlinkSync(source, target, 'dir')
+      }
+      throw error
+    } finally {
+      rmSync(staged, { recursive: true, force: true })
+    }
+  }
+}
+
 function syncCodex(ctxPkgDir) {
   const codexDir = codexHome()
   const hooksPath = join(codexDir, 'hooks.json')
@@ -557,6 +586,7 @@ function syncCodex(ctxPkgDir) {
   // Upstream setup also migrates v1 state, trusts current hook hashes and
   // verifies MCP + hooks. Run after our merge so later syncs stay canonical.
   if (ctxPkgDir && Number.parseInt(readJSON(join(ctxPkgDir, 'package.json')).version, 10) >= 2) {
+    detachContextCommandSkills(join(codexDir, 'skills'))
     execFileSync('context-mode', ['setup', '--yes', '--agents', 'codex'], {
       env: { ...process.env, CODEX_HOME: codexDir }, stdio: 'pipe', timeout: 120_000,
     })
@@ -602,6 +632,7 @@ function syncOpenCode() {
     }
     writeJSON(configPath, config)
     if (Number.parseInt(version, 10) >= 2) {
+      detachContextCommandSkills(join(dirname(configPath), 'skills'))
       execFileSync('context-mode', ['setup', '--yes', '--agents', 'opencode'], {
         stdio: 'pipe', timeout: 120_000,
       })

@@ -548,3 +548,32 @@ test('rules sync leaves skipped hosts old workflow links intact', t => {
   assert.equal(r.status, 0, r.stderr);
   assert.ok(lstatSync(link).isSymbolicLink());
 });
+
+
+test('OpenCode upstream skill rendering cannot overwrite canonical source through symlinks', t => {
+  const f = fixture(t, ['OPENCODE']);
+  const pkg = join(f.home, 'npm/context-mode');
+  f.write(join(pkg, 'package.json'), { version: '2.1.10' });
+  f.write(join(pkg, 'server.mjs'), '');
+  f.write(join(f.bin, 'npm'), '#!/bin/sh\necho "' + join(f.home, 'npm') + '"\n');
+  f.write(join(f.bin, 'context-mode'), `#!${process.execPath}
+const fs=require('node:fs'),path=require('node:path');
+const file=path.join(process.env.HOME,'.config/opencode/skills/ctx-doctor/SKILL.md');
+fs.writeFileSync(file,'host-specific tool spelling');
+`);
+  spawnSync('chmod', ['+x', join(f.bin, 'npm'), join(f.bin, 'context-mode')]);
+  const source = join(f.home, '.agents/skills/ctx-doctor');
+  const target = join(f.home, '.config/opencode/skills/ctx-doctor');
+  f.write(join(source, 'SKILL.md'), 'canonical source must stay unchanged');
+  f.write(join(source, 'references/nested.md'), 'nested reference');
+  mkdirSync(join(target, '..'), { recursive: true });
+  symlinkSync(source, target);
+  for (let round = 0; round < 2; round++) {
+    const r = f.run('sync-hooks.mjs');
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(readFileSync(join(source, 'SKILL.md'), 'utf8'), 'canonical source must stay unchanged');
+    assert.equal(readFileSync(join(target, 'SKILL.md'), 'utf8'), 'host-specific tool spelling');
+    assert.equal(readFileSync(join(target, 'references/nested.md'), 'utf8'), 'nested reference');
+    assert.equal(lstatSync(target).isSymbolicLink(), false);
+  }
+});

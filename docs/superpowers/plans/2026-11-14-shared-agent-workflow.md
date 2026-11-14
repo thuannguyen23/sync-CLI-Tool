@@ -65,3 +65,43 @@ summary.json and final-scoped.diff. Evidence permissions are private.
 
 Current step: complete. Blockers: none for this scope. Next: ordinary tasks use
 the unified policy; broader behavioral/performance evaluation is separate.
+
+## Full sync and selected-model runtime verification
+
+User requested a fresh complete rules/skills/MCP/hooks sync for Codex, OpenCode,
+and AGY, followed by individual sessions using gpt-6-luna, DeepSeek free, and
+Gemini 3.8 Flash Medium. The active Orca CODEX_HOME changed to account
+8972ce6a-214b-420d-a797-9c4759e39292; sync uses that profile. Unselected clients
+are skipped. Model choices are per-session, leaving the Codex default intact.
+
+The initial full npm run sync exited 0 and doctor exited 0. Runtime sessions
+confirmed shell/skill/context-mode success for Codex and OpenCode. AGY's initial
+session reported SUCCESS despite a denied MCP permission; it is not counted as
+a passing sandbox probe. A session-only allow-list retry replaced existing
+permissions and denied the skill read. The final probe grants only the exact
+read/marker/sandbox capabilities for that invocation; no global permissions are
+changed. All unsuccessful attempts remain in evidence.
+
+The full sync also exposed upstream context-mode setup rendering host tool names
+through ctx-* directory symlinks into canonical skill sources. Preflight Git was
+clean. Restored exactly those three source-only spelling changes, reproduced the
+write-through in an isolated failing regression, then detached command skill
+symlinks to host-local copies before both Codex/OpenCode setup calls. No upstream
+skill body is changed. The regression now passes including two consecutive syncs
+and nested-reference preservation. All 125 tests pass in isolated HOME, with
+zero failures/skips. A second real full sync exits 0 and all three canonical
+source hashes remain unchanged. Models, providers and upstream skill bodies are
+preserved. Current step: assess AGY final probe and archive evidence.
+
+Evidence directory: /home/thuannguyen23/.local/state/sync-cli-tool/evidence/2026-11-14-full-sync-sessions-161840
+
+Full-sync verification completed: AGY final session SUCCESS / exit 0, explicit
+Gemini 3.8 Flash Medium confirmed in init metadata, canonical skill read, marker
+observed, context-mode ctx_execute returned 10 and no denied_actions remained.
+Its narrow allow-list is session-only; persistent MCP permission policy is not
+claimed fixed or bypassed. Codex used gpt-6-luna and OpenCode DeepSeek v4.1 Flash
+free, with successful actual shell and context-mode tool events. Three canonical
+policy contents match and final doctor exits 0. No database/service calls or
+full hook/compaction validation was performed. Source-protection regression and
+native outputs are preserved in the evidence directory. This authorized scope
+is complete, self-reviewed, with no remaining blocker for these bounded probes.
