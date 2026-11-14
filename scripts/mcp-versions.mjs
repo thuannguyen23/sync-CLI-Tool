@@ -8,6 +8,7 @@ export function versionTargets(catalog){
   const targets=[{kind:'npm',package:'context-mode',global:true},{kind:'npm',package:'agent-browser',global:true},
     {kind:'github',package:'github/github-mcp-server',binary:'github-mcp-server'},
     {kind:'github',package:'colbymchenry/codegraph',binary:'codegraph'},
+    {kind:'github',package:'rtk-ai/rtk',binary:'rtk'},
     {kind:'commit',package:'redhat-community-ai-tools/slack-mcp',local:'slack'},
     {kind:'commit',package:'timoncool/telegram-api-mcp',local:'telegram'}];
   for(const s of Object.values(catalog.servers)){

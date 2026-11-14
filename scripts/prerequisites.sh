@@ -72,11 +72,11 @@ fi
 
 # ─── rtk (Rust Token Killer) ─────────────────────────────────────────────────
 section "rtk"
-if has rtk; then
+if has rtk && [[ "$(rtk --version 2>/dev/null)" =~ ^rtk\ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
   ok "rtk found: $(which rtk) ($(rtk --version 2>/dev/null | head -1))"
 else
   warn "rtk not found — installing..."
-  if curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh; then
+  if node "$PREREQ_AGENTS_DIR/scripts/install-host-mcps.mjs" --rtk-only; then
     export PATH="$HOME/.local/bin:$PATH"
     if has rtk; then
       ok "rtk installed: $(rtk --version 2>/dev/null | head -1)"

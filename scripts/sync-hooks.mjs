@@ -26,6 +26,7 @@ import {
 import { join, dirname } from 'path'
 import { execSync, execFileSync } from 'child_process'
 import { homedir } from 'os'
+import { createHash } from 'node:crypto'
 
 import { backupFile, codexHome, openCodeConfigPath, readConfig } from './config-utils.mjs'
 
@@ -59,6 +60,70 @@ function writeJSON(path, data) {
 function hasCmd(cmd) {
   try { execSync(`which ${cmd}`, { stdio: 'ignore' }); return true }
   catch { return false }
+}
+
+function shellQuote(value) {
+  return "'" + value.replaceAll("'", "'\\''") + "'"
+}
+
+function resolveRtkBinary() {
+  const preferred = join(HOME, '.local', 'bin', 'rtk')
+  const binary = existsSync(preferred) ? preferred : execFileSync('which', ['rtk'], { encoding: 'utf8' }).trim()
+  const version = execFileSync(binary, ['--version'], { encoding: 'utf8' }).trim()
+  if (!/^rtk \d+\.\d+\.\d+/.test(version)) throw new Error(`Not Rust Token Killer: ${binary}`)
+  return binary
+}
+
+function repairRtkNodeCollision() {
+  if (!hasCmd('rtk')) return
+  const canonical = resolveRtkBinary()
+  const entry = join(dirname(process.execPath), 'rtk')
+  if (!entry.startsWith(HOME + '/') || !existsSync(entry) || entry === canonical) return
+  const target = realpathSync(entry)
+  if (target !== realpathSync(canonical)) {
+    const version = execFileSync(entry, ['--version'], { encoding: 'utf8' }).trim()
+    if (!/^rtk \d+\.\d+\.\d+/.test(version)) {
+      const pkg = join(dirname(dirname(target)), 'package.json')
+      if (!target.endsWith('/node_modules/rtk/bin/rtk.js') || !existsSync(pkg) ||
+          !/release tool/i.test(readJSON(pkg).description || '')) return
+      const backup = entry + '.release-tool-backup'
+      if (existsSync(backup)) throw new Error(`RTK collision backup already exists: ${backup}`)
+      renameSync(entry, backup)
+    } else if (readFileSync(entry).equals(readFileSync(canonical))) return
+  }
+  // AGY's terminal sandbox cannot follow an external ~/.local/bin symlink.
+  // Keep an actual, verified binary in its existing Node bin directory.
+  const staged = entry + `.sync-${process.pid}`
+  cpSync(canonical, staged); chmodSync(staged, 0o755); renameSync(staged, entry)
+  ok('RTK      Node bin uses Rust Token Killer; release tool entry retained as backup')
+}
+
+function trustCodexRtk(codexDir) {
+  const file = join(codexDir, 'hooks.json')
+  const hooks = readJSON(file).hooks || {}
+  const nativeCommand = `${shellQuote(resolveRtkBinary())} hook codex`
+  const configFile = join(codexDir, 'config.toml')
+  let text = existsSync(configFile) ? readFileSync(configFile, 'utf8') : ''
+  const sort = value => Array.isArray(value) ? value.map(sort) : value && typeof value === 'object'
+    ? Object.fromEntries(Object.keys(value).sort().map(k => [k, sort(value[k])])) : value
+  for (const [gi, group] of (hooks.PreToolUse || []).entries()) {
+    for (const [hi, hook] of (group.hooks || []).entries()) {
+      if (hook.command !== nativeCommand) continue
+      const identity = { event_name: 'pre_tool_use', hooks: [{ ...hook, async: false }] }
+      if (group.matcher !== undefined) identity.matcher = group.matcher
+      const hash = 'sha256:' + createHash('sha256').update(JSON.stringify(sort(identity))).digest('hex')
+      const header = `[hooks.state.${JSON.stringify(`${realpathSync(file)}:pre_tool_use:${gi}:${hi}`)}]`
+      const start = text.indexOf(header)
+      const next = start < 0 ? -1 : text.indexOf('\n[', start + header.length)
+      const end = next < 0 ? text.length : next
+      const section = start < 0 ? header : text.slice(start, end).split('\n')
+        .filter(line => !/^\s*(trusted_hash|trusted_content_hash|enabled)\s*=/.test(line)).join('\n').trimEnd()
+      const replacement = `${section}\nenabled = true\ntrusted_hash = ${JSON.stringify(hash)}\n`
+      text = start < 0 ? text.trimEnd() + '\n\n' + replacement : text.slice(0, start) + replacement + text.slice(end)
+    }
+  }
+  backupIfNeeded(configFile)
+  writeFileSync(configFile, text, { mode: 0o600 }); chmodSync(configFile, 0o600)
 }
 
 function safeSymlink(src, dst) {
@@ -305,6 +370,14 @@ function syncAgy(ctxPkgDir) {
       cpSync(rtkPluginSrc, rtkDstGlobal, { recursive: true, force: true })
       cpSync(rtkPluginSrc, rtkDstCli,    { recursive: true, force: true })
       cpSync(rtkPluginSrc, rtkDstIde,    { recursive: true, force: true })
+      for (const dst of [rtkDstGlobal, rtkDstCli, rtkDstIde]) {
+        const file = join(dst, 'hooks.json')
+        const hooks = readJSON(file)
+        for (const group of hooks['rtk-rewrite']?.PreToolUse || []) {
+          for (const hook of group.hooks || []) hook.command = `${shellQuote(resolveRtkBinary())} hook antigravity`
+        }
+        writeJSON(file, hooks)
+      }
       ok('AGY      RTK plugin installed (Global, CLI, IDE)')
     }
   }
@@ -459,27 +532,24 @@ function syncCodex(ctxPkgDir) {
     ok('Codex    context-mode native MCP and hooks registered')
   }
 
-  // RTK: sync rtk_pre_tool_use.py hook script and register PreToolUse hook for Bash
+  // Use RTK's native processor; remove only legacy managed handlers.
   if (hasCmd('rtk')) {
-    const codexHookSrc = join(dirname(new URL(import.meta.url).pathname), '..', 'hooks', 'codex', 'rtk_pre_tool_use.py')
-    const codexHooksDir = join(codexDir, 'hooks')
-    const codexHookDst = join(codexHooksDir, 'rtk_pre_tool_use.py')
-    if (existsSync(codexHookSrc)) {
-      mkdirSync(codexHooksDir, { recursive: true })
-      backupIfNeeded(codexHookDst)
-      cpSync(codexHookSrc, codexHookDst, { force: true })
-      chmodSync(codexHookDst, 0o755)
+    const rtkBinary = resolveRtkBinary()
+    for (const [event, groups] of Object.entries(hooks)) {
+      const next = groups.flatMap(group => {
+        const handlers = (group.hooks || []).filter(h => !/rtk_pre_tool_use\.py|\brtk["']?\s+hook\s+codex/.test(h.command || ''))
+        return handlers.length ? [{ ...group, hooks: handlers }] : []
+      })
+      if (JSON.stringify(next) !== JSON.stringify(groups)) { hooks[event] = next; changed = true }
     }
-
     changed |= ensureCodexHook(hooks, 'PreToolUse', {
-      hooks: [{
-        command: `python3 '${codexHookDst.replace(/'/g, "'\\''")}'`,
-        statusMessage: 'RTK rewrite',
-        timeout: 10,
-        type: 'command'
-      }],
-      matcher: '^Bash$'
-    }, 'rtk_pre_tool_use.py', true)
+      matcher: '^Bash$', hooks: [{ type: 'command', command: `${shellQuote(rtkBinary)} hook codex`, timeout: 10 }],
+    }, 'hook codex', true)
+    const legacy = join(codexDir, 'hooks', 'rtk_pre_tool_use.py')
+    if (existsSync(legacy)) {
+      backupIfNeeded(legacy)
+      cpSync(join(dirname(new URL(import.meta.url).pathname), '..', 'hooks', 'codex', 'rtk_pre_tool_use.py'), legacy)
+    }
   }
 
   if (changed) writeJSON(hooksPath, config)
@@ -491,6 +561,8 @@ function syncCodex(ctxPkgDir) {
       env: { ...process.env, CODEX_HOME: codexDir }, stdio: 'pipe', timeout: 120_000,
     })
   }
+
+  if (hasCmd('rtk')) trustCodexRtk(codexDir)
 
   // Status message
   const hasHerdr = existsSync(herdrScript)
@@ -533,11 +605,6 @@ function syncOpenCode() {
       execFileSync('context-mode', ['setup', '--yes', '--agents', 'opencode'], {
         stdio: 'pipe', timeout: 120_000,
       })
-    }
-    if (process.argv.includes('--reload-opencode')) {
-      if (!hasCmd('opencode')) throw new Error('OpenCode reload requested but CLI is unavailable')
-      execFileSync('opencode', ['reload'], { stdio: 'pipe', timeout: 30_000 })
-      ok('OpenCode running service configuration reloaded')
     }
     ok('OpenCode context-mode native MCP registered')
   }
@@ -653,6 +720,7 @@ console.log('\n🔗 Syncing hooks (context-mode + herdr)...\n')
 
 const HAS_CTX = hasCmd('context-mode')
 const ctxPkgDir = findContextModePkg()
+repairRtkNodeCollision()
 
 if (!HAS_CTX) {
   warn('context-mode not installed — context-mode hooks will be skipped')
@@ -671,5 +739,12 @@ if (!process.env.SKIP_OPENCODE) { try { syncOpenCode() }         catch (e) { err
 if (!process.env.SKIP_KILO) { try { syncKilo() }             catch (e) { err(`Kilo: ${e.message}`) } } else { info('Kilo     hooks → skipped') }
 if (!process.env.SKIP_CLAUDE) { try { syncClaude() }           catch (e) { err(`Claude Code: ${e.message}`) } } else { info('Claude Code hooks → skipped') }
 if (!process.env.SKIP_CLINE) { try { syncCline() }            catch (e) { err(`Cline: ${e.message}`) } } else { info('Cline    hooks → skipped') }
+
+if (!process.exitCode && !process.env.SKIP_OPENCODE && process.argv.includes('--reload-opencode')) {
+  try {
+    execFileSync('opencode', ['reload'], { stdio: 'pipe', timeout: 30_000 })
+    ok('OpenCode running service configuration reloaded')
+  } catch (e) { err(`OpenCode reload: ${e.message}`) }
+}
 
 console.log(process.exitCode ? '\nHooks sync failed; inspect the errors above.\n' : '\n✨ Hooks sync complete.\n')

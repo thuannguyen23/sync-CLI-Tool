@@ -173,7 +173,9 @@ function inspectCodexRtk(hooks) {
     for (const group of groups) {
       if (!Array.isArray(group?.hooks)) continue;
       for (const hook of group.hooks) {
-        if (typeof hook?.command !== 'string' || !hook.command.includes('rtk_pre_tool_use.py')) continue;
+        if (typeof hook?.command !== 'string') continue;
+        const native = hook.command.match(/^(?:'([^']+)'|"([^"$`\\]+)"|([^\s'"$`\\;|&<>]+))\s+hook\s+codex$/);
+        if (!native && !hook.command.includes('rtk_pre_tool_use.py')) continue;
         found = true;
         if (event !== 'PreToolUse') {
           report('ERROR', subject, 'RTK hook must use PreToolUse');
@@ -191,6 +193,13 @@ function inspectCodexRtk(hooks) {
           }
         } catch {
           report('ERROR', subject, 'RTK matcher is invalid');
+          continue;
+        }
+        if (native) {
+          const binary = native[1] ?? native[2] ?? native[3];
+          if (!isAbsolute(binary)) report('UNVERIFIED', subject, 'Native RTK uses PATH; binary and execution not tested');
+          else if (!existsSync(binary) || !statSync(binary).isFile()) report('ERROR', subject, 'Native RTK binary does not exist');
+          else report('UNVERIFIED', subject, 'Native RTK event, matcher and binary checked; execution not tested');
           continue;
         }
         // Parse only a direct python3 invocation; never evaluate shell syntax.

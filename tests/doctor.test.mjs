@@ -152,3 +152,10 @@ test('inspects RTK in the active CODEX_HOME instead of the default profile', t =
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stdout, /\[ERROR\] Codex RTK: RTK hook must use PreToolUse/);
 });
+
+test('doctor recognizes native Codex RTK without executing it', t => {
+ const f=fixture(t);const binary=join(f.home,'rtk');writeFileSync(binary,'must not execute');
+ writeFileSync(join(f.mcp,'servers.json'),JSON.stringify({servers:{}}));
+ writeFileSync(join(f.home,'.codex/hooks.json'),JSON.stringify({hooks:{PreToolUse:[{matcher:'^Bash$',hooks:[{type:'command',command:`'${binary}' hook codex`}]}]}}));
+ const r=f.run();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/Codex RTK: Native RTK event, matcher and binary checked; execution not tested/);
+});

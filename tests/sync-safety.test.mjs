@@ -177,7 +177,7 @@ test('a failed Codex hook install exits nonzero and does not report completion',
   const f = fixture(t, ['CODEX']);
   f.env.CODEX_HOME = join(f.home, 'profile-is-a-file');
   f.write(f.env.CODEX_HOME, 'keep');
-  writeFileSync(join(f.bin, 'rtk'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  writeFileSync(join(f.bin, 'rtk'), '#!/bin/sh\n[ "$1" = --version ] && echo "rtk 1.2.0"\nexit 0\n', { mode: 0o755 });
   writeFileSync(join(f.bin, 'npm'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
   const result = f.run('sync-hooks.mjs');
   assert.notEqual(result.status, 0);
@@ -190,7 +190,7 @@ test('OpenCode V2 RTK callback rewrites event.input and ignores other tools',
   const f = fixture(t);
   const entry = join(f.home, 'rtk.ts');
   copyFileSync(join(repo, 'plugins/opencode/rtk.ts'), entry);
-  writeFileSync(join(f.bin, 'rtk'), '#!/bin/sh\nprintf "rtk git status --short\\n"\n', { mode: 0o755 });
+  writeFileSync(join(f.bin, 'rtk'), "#!/bin/sh\n[ \"$3\" = --help ] && exit 0\nprintf '{\"command\":\"rtk git status --short\"}\\n'\n", { mode: 0o755 });
   const script = `import plugin from ${JSON.stringify(pathToFileURL(entry).href)};
     let before;
     await plugin.setup({tool:{hook:async (_name, fn) => {before = fn}}});
@@ -207,6 +207,15 @@ test('OpenCode V2 RTK callback rewrites event.input and ignores other tools',
   });
 });
 
+test('OpenCode RTK preserves a native no-rewrite permission decision', t => {
+  const f=fixture(t); const entry=join(f.home,'rtk.ts');copyFileSync(join(repo,'plugins/opencode/rtk.ts'),entry);
+  f.write(join(f.bin,'rtk'),'#!/bin/sh\nif [ "$1 $2" = "hook opencode" ]; then printf "{}\\n"; else printf "rtk git status\\n"; fi\n');
+  spawnSync('chmod',['+x',join(f.bin,'rtk')]);
+  const script=`import plugin from ${JSON.stringify(pathToFileURL(entry).href)};let cb;await plugin.setup({tool:{hook:async(_,fn)=>{cb=fn}}});let e={tool:'shell',agent:'restricted',input:{command:'git status'}};await cb(e);console.log(e.input.command);`;
+  const r=spawnSync(process.execPath,['--experimental-strip-types','--input-type=module','-e',script],{env:f.env,cwd:f.home,encoding:'utf8'});
+  assert.equal(r.status,0,r.stderr);assert.equal(r.stdout.trim(),'git status');
+});
+
 test('AGY normalizes deployed context-mode hooks and supplies an active rule', t => {
   const f = fixture(t, ['AGY']);
   const npmRoot = join(f.home, 'npm');
@@ -221,7 +230,7 @@ test('AGY normalizes deployed context-mode hooks and supplies an active rule', t
   f.write(join(plugin, 'rules/context-mode.md'), '# Context routing\n');
   mkdirSync(join(f.home, '.agents/skills'), { recursive: true });
   for (const binary of ['rtk', 'context-mode']) {
-    writeFileSync(join(f.bin, binary), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    writeFileSync(join(f.bin, binary), '#!/bin/sh\n[ "$1" = --version ] && echo "rtk 1.2.0"\nexit 0\n', { mode: 0o755 });
   }
   writeFileSync(join(f.bin, 'npm'), `#!/bin/sh\nprintf '%s\\n' '${npmRoot}'\n`, { mode: 0o755 });
   for (let i = 0; i < 2; i++) {

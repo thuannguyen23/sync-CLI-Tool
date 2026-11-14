@@ -19,3 +19,14 @@ test('host installation planning distinguishes installed binaries from missing b
  assert.deepEqual(hostInstallPlan(()=>true,true),['github','slack','telegram']);
  assert.throws(()=>verifyChecksum(Buffer.from('bad'),'0'.repeat(64)),/checksum/i);
 });
+
+test('RTK checksum failure preserves the installed binary', async t => {
+ const {installRtk}=await import('../scripts/install-host-mcps.mjs');
+ const root=mkdtempSync(join(tmpdir(),'rtk-checksum-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
+ mkdirSync(join(root,'.local/bin'),{recursive:true});const binary=join(root,'.local/bin/rtk');writeFileSync(binary,'keep');
+ await assert.rejects(()=>installRtk(root,root,async url=>{
+  if(url.includes('releases/latest'))return Buffer.from(JSON.stringify({tag_name:'v1.2.0',assets:[{name:'rtk-x86_64-unknown-linux-musl.tar.gz',browser_download_url:'fixture:archive'},{name:'checksums.txt',browser_download_url:'fixture:checksums'}]}));
+  return Buffer.from(url==='fixture:archive'?'invalid archive':'0'.repeat(64)+'  rtk-x86_64-unknown-linux-musl.tar.gz\n');
+ }),/checksum/);
+ assert.equal(readFileSync(binary,'utf8'),'keep');
+});

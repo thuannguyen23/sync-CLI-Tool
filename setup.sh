@@ -297,8 +297,8 @@ fi
 # ─── Step 5: RTK (Rust Token Killer) ─────────────────────────────────────────
 # Each agent gets RTK through its native mechanism:
 #   Cursor  → hook (rtk init merges into hooks.json, preserves existing hooks)
-#   Codex   → prompt rule compiled in AGENTS.md
-#   AGY     → prompt rule compiled in AGENTS.md
+#   Codex   → native rtk hook codex (registered in Step 7)
+#   AGY     → native rtk hook antigravity plugin (Step 7)
 #   OpenCode → TypeScript plugin (symlinked from repo for version control)
 #   Kilo    → prompt rule in AGENTS.md
 #   Claude Code → hook (rtk hook claude in ~/.claude/settings.json)
@@ -315,12 +315,12 @@ if has rtk; then
   # Codex: RTK is already compiled into AGENTS.md (clean up any duplicate RTK.md)
   if [ -z "${SKIP_CODEX:-}" ]; then
     rm -f "$HOME_DIR/.codex/RTK.md" 2>/dev/null || true
-    ok "RTK → Codex (integrated in AGENTS.md)"
+    info "RTK → Codex native hook will be synchronized in Step 7"
   fi
 
   # AGY: RTK is already compiled into AGENTS.md
   if [ -z "${SKIP_AGY:-}" ]; then
-    ok "RTK → AGY (integrated in AGENTS.md)"
+    info "RTK → AGY native plugin will be synchronized in Step 7"
   fi
 
   # OpenCode RTK installation is handled by sync-hooks.mjs in Step 7.

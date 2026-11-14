@@ -63,7 +63,7 @@ function codexFixture(t, customHome) {
   const bin = join(root, 'bin')
   mkdirSync(codexHome, { recursive: true })
   mkdirSync(bin, { recursive: true })
-  writeFileSync(join(bin, 'rtk'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  writeFileSync(join(bin, 'rtk'), '#!/bin/sh\n[ "$1" = --version ] && echo "rtk 1.2.0"\nexit 0\n', { mode: 0o755 })
   // These fixtures exercise RTK alone; do not discover packages on the host.
   writeFileSync(join(bin, 'npm'), '#!/bin/sh\nexit 1\n', { mode: 0o755 })
   const env = {
@@ -114,11 +114,12 @@ test('Codex sync repairs a stale RTK hook inside CODEX_HOME and preserves other 
     { hooks: [unrelated] }, unrelatedGroup,
   ])
   const managed = config.hooks.PreToolUse.filter(group =>
-    group.hooks.some(hook => hook.command.includes('rtk_pre_tool_use.py')))
+    group.hooks.some(hook => hook.command.includes('hook codex')))
   assert.equal(managed.length, 1)
   assert.equal(managed[0].matcher, '^Bash$')
-  assert.equal(readFileSync(hookPath, 'utf8'), readFileSync(
-    new URL('../hooks/codex/rtk_pre_tool_use.py', import.meta.url), 'utf8'))
+  assert.match(readFileSync(hookPath, 'utf8'), /Compatibility delegate/)
+  assert.match(managed[0].hooks[0].command, /hook codex$/)
+  assert.match(readFileSync(join(codexHome, 'config.toml'), 'utf8'), /trusted_hash = "sha256:[a-f0-9]{64}"/)
   const execution = spawnSync(managed[0].hooks[0].command, {
     shell: '/bin/sh', input: '{}', encoding: 'utf8',
   })
@@ -138,7 +139,7 @@ test('Codex sync falls back to ~/.codex without CODEX_HOME', (t) => {
     PreToolUse: [{ hooks: [{ type: 'command', command: 'python3 /old/rtk_pre_tool_use.py' }] }],
   } }))
   sync()
-  assert.ok(existsSync(join(codexHome, 'hooks', 'rtk_pre_tool_use.py')))
+  assert.equal(existsSync(join(codexHome, 'hooks', 'rtk_pre_tool_use.py')), false)
   const config = JSON.parse(readFileSync(join(codexHome, 'hooks.json'), 'utf8'))
   assert.equal(config.hooks.PreToolUse.length, 1)
   assert.equal(config.hooks.PreToolUse[0].matcher, '^Bash$')

@@ -13,6 +13,7 @@ export function updateCommands(catalog) {
     if(target.kind==='pypi')commands.push(['uvx',['--upgrade','--from',target.package,'python','-c',`import importlib.metadata; print(importlib.metadata.version(${JSON.stringify(target.package)}))`]]);
   }
   commands.push([process.execPath,[fileURLToPath(new URL('./install-host-mcps.mjs',import.meta.url)),'--update']]);
+  commands.push([process.execPath,[fileURLToPath(new URL('./install-host-mcps.mjs',import.meta.url)),'--rtk-only']]);
   commands.push([process.execPath,[fileURLToPath(new URL('./sync-mcp.mjs',import.meta.url))]]);
   commands.push([process.execPath,[fileURLToPath(new URL('./sync-hooks.mjs',import.meta.url))]]);
   return commands;
