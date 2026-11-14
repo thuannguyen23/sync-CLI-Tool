@@ -21,7 +21,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, existsSync,
-  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync
+  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync, renameSync
 } from 'fs'
 import { join, dirname } from 'path'
 import { execSync, execFileSync } from 'child_process'
@@ -323,6 +323,15 @@ function syncAgy(ctxPkgDir) {
     if (legacy) {
       if (!hasCmd('agy')) throw new Error('Disable the legacy context-mode plugin with agy before syncing v2')
       execFileSync('agy',['plugin','disable','context-mode'],{stdio:'pipe'})
+      for (const base of ['config', 'antigravity-cli', 'antigravity-ide', 'antigravity']) {
+        const plugin = join(HOME, '.gemini', base, 'plugins', 'context-mode')
+        const manifest = join(plugin, 'plugin.json')
+        if (!existsSync(manifest) || Number.parseInt(readJSON(manifest).version, 10) >= 2) continue
+        const archive = join(HOME, '.local', 'state', 'sync-cli-tool', 'context-mode-v1', base)
+        if (existsSync(archive)) throw new Error(`Legacy plugin archive already exists: ${archive}`)
+        mkdirSync(dirname(archive), { recursive: true, mode: 0o700 })
+        renameSync(plugin, archive)
+      }
     }
     for (const base of ['config', 'antigravity-cli', 'antigravity-ide', 'antigravity']) {
       const file = join(HOME, '.gemini', base, 'mcp_config.json')
@@ -331,7 +340,7 @@ function syncAgy(ctxPkgDir) {
       config.mcpServers['context-mode'] = { command: process.execPath, args: [join(ctxPkgDir, 'server.mjs'), '--agent', 'gemini'] }
       writeJSON(file, config)
     }
-    ok('AGY      context-mode v2 MCP registered; obsolete plugin disabled when present (no v2 AGY hooks)')
+    warn('AGY      context-mode v2 uses Gemini MCP compatibility only; legacy plugin archived, no upstream AGY hooks')
     return
   }
 
@@ -417,18 +426,32 @@ function syncCodex(ctxPkgDir) {
   // Marketplace metadata alone does not install a plugin. Use the installed
   // package's native adapter, without fetching or installing any dependency.
   if (hasCmd('context-mode') && ctxPkgDir) {
-    const templatePath = join(ctxPkgDir, 'configs', 'codex', 'hooks.json')
+    const version = readJSON(join(ctxPkgDir, 'package.json')).version || ''
+    const v2 = Number.parseInt(version, 10) >= 2
+    const templatePath = v2 ? join(ctxPkgDir, 'hooks', 'codex.json') : join(ctxPkgDir, 'configs', 'codex', 'hooks.json')
+    if (v2 && !existsSync(templatePath)) throw new Error('context-mode v2 Codex hook template is missing')
+    if (v2) {
+      for (const [event, groups] of Object.entries(hooks)) {
+        const remaining = groups.flatMap(group => {
+          const handlers = (group.hooks || []).filter(h => !/context-mode/.test(h.command || ''))
+          return handlers.length ? [{ ...group, hooks: handlers }] : []
+        })
+        if (JSON.stringify(remaining) !== JSON.stringify(groups)) { hooks[event] = remaining; changed = true }
+      }
+    }
     if (existsSync(templatePath)) {
       const template = readJSON(templatePath)
       for (const [event, entries] of Object.entries(template.hooks || {})) {
         for (const entry of entries) {
-          changed |= ensureCodexHook(hooks, event, entry, 'context-mode hook codex', true)
+          const resolved = v2 ? { ...entry, hooks: entry.hooks.map(h => ({ ...h,
+            command: `${JSON.stringify(process.execPath)} ${JSON.stringify(join(ctxPkgDir, 'hook.mjs'))} --agent codex`
+          })) } : entry
+          changed |= ensureCodexHook(hooks, event, resolved, v2 ? join(ctxPkgDir, 'hook.mjs') : 'context-mode hook codex', true)
         }
       }
     }
     backupIfNeeded(join(codexDir, 'config.toml'))
     const binary = execSync('which context-mode', { encoding: 'utf8' }).trim()
-    const version = existsSync(join(ctxPkgDir, 'package.json')) ? readJSON(join(ctxPkgDir, 'package.json')).version : ''
     const serverArgs = Number.parseInt(version, 10) >= 2 ? ['server', '--agent', 'codex'] : []
     execFileSync('codex', ['mcp', 'add', 'context-mode', '--', binary, ...serverArgs], {
       env: { ...process.env, CODEX_HOME: codexDir }, stdio: 'pipe',
@@ -461,6 +484,14 @@ function syncCodex(ctxPkgDir) {
 
   if (changed) writeJSON(hooksPath, config)
 
+  // Upstream setup also migrates v1 state, trusts current hook hashes and
+  // verifies MCP + hooks. Run after our merge so later syncs stay canonical.
+  if (ctxPkgDir && Number.parseInt(readJSON(join(ctxPkgDir, 'package.json')).version, 10) >= 2) {
+    execFileSync('context-mode', ['setup', '--yes', '--agents', 'codex'], {
+      env: { ...process.env, CODEX_HOME: codexDir }, stdio: 'pipe', timeout: 120_000,
+    })
+  }
+
   // Status message
   const hasHerdr = existsSync(herdrScript)
   if (hasHerdr) {
@@ -483,8 +514,12 @@ function syncOpenCode() {
     const version = ctxPkgDir && existsSync(join(ctxPkgDir, 'package.json'))
       ? readJSON(join(ctxPkgDir, 'package.json')).version : ''
     if (Number.parseInt(version, 10) >= 2 && existsSync(join(ctxPkgDir, 'server.mjs'))) {
-      config.mcp['context-mode'] = { type: 'local', command: [process.execPath, join(ctxPkgDir, 'server.mjs'), '--agent', 'opencode'], enabled: true }
-      delete config.mcp.servers['context-mode']
+      config.mcp.servers['context-mode'] = { type: 'local', command: [process.execPath, join(ctxPkgDir, 'server.mjs'), '--agent', 'opencode'], disabled: false }
+      delete config.mcp['context-mode']
+      const plugins = [...new Set([...(config.plugins || []), ...(config.plugin || [])])]
+        .filter(p => typeof p !== 'string' || !/(^context-mode(?:@.*)?$|(?:^|\/)context-mode(?:\/)?$)/.test(p))
+      config.plugins = [...plugins, ctxPkgDir]
+      delete config.plugin
     } else {
       config.mcp.servers['context-mode'] = { type: 'local', command: [binary], enabled: true }
     }
@@ -494,6 +529,16 @@ function syncOpenCode() {
       if (Array.isArray(config[key])) config[key] = config[key].filter(p => p !== 'context-mode')
     }
     writeJSON(configPath, config)
+    if (Number.parseInt(version, 10) >= 2) {
+      execFileSync('context-mode', ['setup', '--yes', '--agents', 'opencode'], {
+        stdio: 'pipe', timeout: 120_000,
+      })
+    }
+    if (process.argv.includes('--reload-opencode')) {
+      if (!hasCmd('opencode')) throw new Error('OpenCode reload requested but CLI is unavailable')
+      execFileSync('opencode', ['reload'], { stdio: 'pipe', timeout: 30_000 })
+      ok('OpenCode running service configuration reloaded')
+    }
     ok('OpenCode context-mode native MCP registered')
   }
   if (!hasCmd('rtk')) {

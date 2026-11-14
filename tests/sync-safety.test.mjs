@@ -27,8 +27,8 @@ function fixture(t, selected = []) {
     mkdirSync(join(path, '..'), { recursive: true });
     writeFileSync(path, typeof contents === 'string' ? contents : JSON.stringify(contents));
   }
-  function run(name) {
-    return spawnSync(process.execPath, [join(repo, 'scripts', name)], {
+  function run(name, args = []) {
+    return spawnSync(process.execPath, [join(repo, 'scripts', name), ...args], {
       cwd: repo, env, encoding: 'utf8', timeout: 15_000,
     });
   }
@@ -273,7 +273,7 @@ test('OpenCode registers native context-mode MCP while preserving personal confi
   assert.deepEqual(actual.mcp.servers['context-mode'].command, [join(f.bin, 'context-mode')]);
 });
 
-test('OpenCode launches context-mode v2 as an MCP server', t => {
+test('OpenCode migrates context-mode v2 into native servers and current plugin', t => {
   const f = fixture(t, ['OPENCODE']);
   const pkg = join(f.home, 'npm/context-mode');
   f.write(join(pkg, 'package.json'), {version:'2.1.5'}); f.write(join(pkg,'server.mjs'),'');
@@ -281,11 +281,16 @@ test('OpenCode launches context-mode v2 as an MCP server', t => {
   f.write(join(f.bin, 'context-mode'), '#!/bin/sh\nexit 0\n');
   spawnSync('chmod', ['+x', join(f.bin, 'npm'), join(f.bin, 'context-mode')]);
   const config = join(f.home, '.config/opencode/opencode.json');
-  f.write(config, {plugin:['context-mode'],mcp:{servers:{'context-mode':{type:'local',command:['old']}}}});
+  f.write(config, {plugin:['/old/node_modules/context-mode','personal-plugin'],mcp:{'context-mode':{command:['stale']},servers:{'context-mode':{type:'local',command:['old']}}}});
   const result = f.run('sync-hooks.mjs'); assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(readFileSync(config)).mcp['context-mode'].command,[process.execPath,join(pkg,'server.mjs'),'--agent','opencode']);
-  assert.equal(JSON.parse(readFileSync(config)).mcp.servers['context-mode'],undefined);
-  assert.deepEqual(JSON.parse(readFileSync(config)).plugin,['context-mode']);
+  assert.deepEqual(JSON.parse(readFileSync(config)).mcp.servers['context-mode'].command,[process.execPath,join(pkg,'server.mjs'),'--agent','opencode']);
+  assert.equal(JSON.parse(readFileSync(config)).mcp['context-mode'],undefined);
+  assert.deepEqual(JSON.parse(readFileSync(config)).plugins,['personal-plugin',pkg]);
+  const first=readFileSync(config,'utf8'); assert.equal(f.run('sync-hooks.mjs').status,0); assert.equal(readFileSync(config,'utf8'),first);
+  f.write(join(f.bin,'opencode'),'#!/bin/sh\n[ "$1" = reload ] || exit 3\nprintf reloaded > "$HOME/opencode-reloaded"\n');
+  spawnSync('chmod',['+x',join(f.bin,'opencode')]);
+  const reload=f.run('sync-hooks.mjs',['--reload-opencode']); assert.equal(reload.status,0,reload.stderr);
+  assert.equal(readFileSync(join(f.home,'opencode-reloaded'),'utf8'),'reloaded');
 });
 
 test('AGY registers context-mode v2 directly and preserves other MCP entries', t => {
@@ -301,6 +306,8 @@ test('AGY registers context-mode v2 directly and preserves other MCP entries', t
   const r=f.run('sync-hooks.mjs');assert.equal(r.status,0,r.stderr);
   const d=JSON.parse(readFileSync(config));assert.equal(d.mcpServers['context-mode'].command,process.execPath);assert.deepEqual(d.mcpServers['context-mode'].args,[join(pkg,'server.mjs'),'--agent','gemini']);assert.equal(d.mcpServers.personal.command,'other');
   assert.equal(readFileSync(join(f.home,'plugin-disabled'),'utf8'),'disabled');
+  assert.equal(existsSync(join(f.home,'.gemini/config/plugins/context-mode')),false);
+  assert.ok(existsSync(join(f.home,'.local/state/sync-cli-tool/context-mode-v1/config/plugin.json')));
 });
 
 test('Codex never exposes resolved credentials in CLI arguments', t => {
@@ -312,3 +319,20 @@ test('Codex never exposes resolved credentials in CLI arguments', t => {
   assert.equal(readFileSync(join(f.home,'argv.jsonl'),'utf8').includes(token),false);
   assert.match(readFileSync(join(f.profile,'config.toml'),'utf8'),new RegExp(token));
 });
+
+ test('Codex v2 replaces legacy hooks while preserving other handlers', t => {
+  const f=fixture(t,['CODEX']); codexBinary(f);
+  const pkg=join(f.home,'npm/context-mode');
+  f.write(join(pkg,'package.json'),{version:'2.1.10'});
+  f.write(join(pkg,'hooks/codex.json'),{hooks:{SessionStart:[{hooks:[{type:'command',command:'node hook.mjs --agent codex'}]}]}});
+  f.write(join(f.bin,'npm'),'#!/bin/sh\necho "'+join(f.home,'npm')+'"\n');
+  f.write(join(f.bin,'context-mode'),'#!/bin/sh\nexit 0\n');
+  spawnSync('chmod',['+x',join(f.bin,'npm'),join(f.bin,'context-mode')]);
+  f.write(join(f.profile,'hooks.json'),{hooks:{SessionStart:[{hooks:[{command:'node /old/node_modules/context-mode/hooks/codex/sessionstart.mjs'},{command:'personal-hook'}]}],PreCompact:[{hooks:[{command:'context-mode hook codex precompact'}]}]}});
+  const r=f.run('sync-hooks.mjs');assert.equal(r.status,0,r.stderr);
+  const hooks=JSON.parse(readFileSync(join(f.profile,'hooks.json'))).hooks;
+  const commands=Object.values(hooks).flatMap(gs=>gs.flatMap(g=>g.hooks||[])).map(h=>h.command);
+  assert.ok(commands.includes('personal-hook'));
+  assert.ok(commands.some(c=>c.includes(join(pkg,'hook.mjs'))));
+  assert.ok(!commands.some(c=>c.includes('/old/')||c.includes('context-mode hook codex')));
+ });
