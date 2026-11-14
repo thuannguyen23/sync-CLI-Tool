@@ -34,8 +34,8 @@ test("canonical policy contains the workflow safety gates", () => {
   assert.match(policy, /The required first-choice tool is `Codegraph`/);
   assert.match(policy, /Verification Gate/);
   assert.match(policy, /Do not repeat a completed lifecycle phase/);
-  assert.match(policy, /Mandatory Code Preview & Approval Gate/);
-  assert.match(policy, /Do you approve these changes for me to apply them\?/);
+  assert.match(policy, /Code Preview and Authorization/);
+  assert.match(policy, /existing explicit authorization/);
   assert.match(policy, /Absolute Git Prohibition/);
   assert.doesNotMatch(policy, /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
 });

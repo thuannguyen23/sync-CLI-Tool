@@ -92,6 +92,45 @@ function inspectMcp() {
   }
 }
 
+function inspectRules() {
+  const source = join(agentsDir, 'rules');
+  if (!existsSync(source)) {
+    report('UNVERIFIED', 'Shared instructions', 'Canonical rules directory not found');
+    return;
+  }
+  const targets = [
+    ['Codex active', codexDir],
+    ['AGY Global', join(home, '.gemini', 'config')],
+    ['OpenCode', join(home, '.config', 'opencode')],
+  ];
+  for (const file of ['AGENTS.md']) {
+    const canonical = join(source, file);
+    if (!existsSync(canonical)) {
+      report('ERROR', 'Shared instructions', `Missing canonical ${file}`);
+      continue;
+    }
+    for (const [name, dir] of targets) {
+      const subject = `Instructions ${name}/${file}`;
+      try {
+        const matches = readFileSync(join(dir, file)).equals(readFileSync(canonical));
+        report(matches ? 'OK' : 'ERROR', subject, matches
+          ? 'Matches canonical content; model loading not tested'
+          : 'Differs from canonical content');
+      } catch (error) {
+        report('ERROR', subject, error.code === 'ENOENT' ? 'Instruction file missing' : 'Cannot read instruction file');
+      }
+    }
+  }
+  if (existsSync(join(codexDir, 'AGENTS.override.md')) &&
+      readFileSync(join(codexDir, 'AGENTS.override.md'), 'utf8').trim()) {
+    report('UNVERIFIED', 'Codex instructions', 'AGENTS.override.md can replace the shared global policy');
+  }
+  const legacy = join(home, '.gemini', 'GEMINI.md');
+  if (existsSync(legacy) && readFileSync(legacy, 'utf8').startsWith('# context-mode — MANDATORY routing rules')) {
+    report('UNVERIFIED', 'AGY instructions', 'Additional context-mode rule remains; check for conflicting routing');
+  }
+}
+
 function inspectSkills() {
   const source = join(agentsDir, 'skills');
   if (!existsSync(source)) {
@@ -276,6 +315,7 @@ function inspectOpenCode() {
 }
 
 inspectMcp();
+inspectRules();
 inspectSkills();
 inspectHooks();
 inspectOpenCode();

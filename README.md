@@ -88,18 +88,32 @@ All skills follow the open **Agent Skills Specification** (`SKILL.md`) and are s
 
 ---
 
-### 3. Canonical Safety & Workflow Rules (`rules/AGENTS.md`)
+### 3. One Shared Agent Policy
 
-The shared policy is written in English for users across projects and supported clients. Project-specific services, environments, and implementation conventions belong in local project instructions.
+`rules/AGENTS.md` contains the common constraints and workflow routing for every
+supported agent: task triage, approved-plan resumption, plan content, canonical
+skill selection, permissions, repair limits, and completion criteria. There is
+no additional workflow document that an agent must remember to read.
 
-- **Workflow Routing:** Distinguishes questions, investigations, design, implementation, debugging, and review. Approved plans resume from their first incomplete task.
-- **Skill Routing:** Maps all 22 installed skills to concrete triggers. Agents read the selected skill and respect its prerequisites; upstream skills remain unchanged unless explicitly authorized.
-- **MCP Routing:** Defines when to use CodeGraph, Context7, web search, GitHub, browser automation, and sequential thinking, plus context-mode where available. Agents discover actual tool schemas instead of assuming client-specific namespaces.
-- **Codegraph Impact Gate:** Uses indexed code relationships for exploration and shared-contract impact analysis, with explicit fallbacks for absent or stale indexes. Index creation requires authorization.
-- **Mandatory Code Preview Gate:** Requires a concrete preview and explicit approval before applying edits. Approval remains bounded by the reviewed scope.
-- **Permissions:** Git mutations, dependency installation, delegation, and external writes remain subject to explicit user and host authorization.
-- **Verification and Repair Limits:** Requires evidence for completion claims, independent review where required, and bounded repair attempts. Passing static checks is not a model-compliance or performance benchmark.
-- **Context Protection:** Uses focused retrieval, context-mode, local processing, and RTK where appropriate while preserving exact diagnostic evidence and providing fallbacks when tools are unavailable.
+Detailed reusable procedures remain in `skills/<name>/SKILL.md`. Agents read the
+selected canonical skill instead of a competing same-named plugin variant.
+Project instructions retain local architecture and commands; each task has one
+plan/progress record when needed. Upstream skill bodies remain unchanged.
+
+`sync-rules.mjs` distributes the same policy using each host's instruction path.
+The Cursor mirror is identical after its frontmatter. During migration, sync
+removes only former `WORKFLOW.md` symlinks pointing into this checkout's rules;
+regular personal files and unrelated links survive, including broken links.
+
+`npm run doctor` compares the policy contents for Codex's active profile, AGY
+Global, and OpenCode. Configuration checks do not prove model loading, compliance,
+or speed. A host-supplied remote plugin catalog may differ from native CLI skill
+discovery; canonical skill routing does not remove those catalog entries.
+
+Existing authorization persists within its scope. Skills cannot grant Git,
+installation, external-write, or delegation permission. The exact recognized
+obsolete standalone context-mode template is archived with a verified private
+backup; modified or personal instructions are preserved.
 
 ---
 
@@ -192,6 +206,55 @@ top-level model; explicit per-agent model overrides remain separate. Free model
 availability is provider-dependent; inspect `opencode models` before choosing.
 OpenCode v2 plugins are written to `plugins` only, including after upstream
 context-mode setup. Doctor detects duplicate entries but never calls a model.
+
+### Task Planning
+
+For medium and large changes, use the existing planning skill and keep six
+areas explicit. The following is a content guide, not a second competing plan
+format. Existing skill headers and task layouts can cover the same information.
+Save new plans under `docs/superpowers/plans/` unless the target project has its
+own convention. Reuse maintained specs and architecture notes by reference.
+
+```markdown
+# Task title
+
+## Goal and scope
+Desired outcome, intended users where relevant, and exclusions.
+
+## Sources and decisions
+Authoritative specs and approved decisions; constraints and open questions.
+Resolve material conflicts before starting dependent work.
+
+## Acceptance criteria
+- Observable behavior that defines done.
+- Failure cases and existing behavior that must be preserved.
+
+## Design and impact
+Affected files, interfaces, data flow and existing patterns to follow.
+Include UI design only when this task needs it.
+
+## Tasks and progress
+- [ ] A bounded task with a checkable outcome.
+Current step:
+Blockers:
+Next action:
+
+## Verification
+Map each acceptance criterion to a check. After running it, record the command,
+result, checked version, evidence path and remaining limits.
+```
+
+For example, "update the OpenCode integration" is not an acceptance criterion.
+"After two syncs, personal providers are preserved, one context-mode plugin is
+registered, and a fresh default-model session executes the shell marker" is
+observable. Configuration, isolated tests and real sessions are different
+evidence categories; record which one establishes each criterion.
+
+Do not create PRD.md, ARCHITECTURE.md, DESIGN.md, RULES.md, TASKS.md and
+PROGRESS.md automatically. Split a document only when it has a distinct audience
+or is independently maintained and reused. Keep current task state in one
+place; a handoff links to it. Small, explicit changes need only a short scope
+and appropriate verification. Existing approved plans do not need reformatting.
 
 ### Workflow Evaluation
 

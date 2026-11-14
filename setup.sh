@@ -235,15 +235,7 @@ section "4 / 7  AGENTS.md (global instructions)"
 AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
 
 # Preserve personal rules and respect CODEX_HOME using the shared adapter.
-SKIP_KILO=1 SKIP_CLINE=1 SKIP_CLAUDE=1 \
-  node "$AGENTS_DIR/scripts/sync-rules.mjs"
-
-# Kilo
-if [ -z "${SKIP_KILO:-}" ]; then
-  mkdir -p "$HOME_DIR/.config/kilo"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.config/kilo/AGENTS.md"
-  ok "Kilo AGENTS.md → $AGENTS_MD"
-fi
+node "$AGENTS_DIR/scripts/sync-rules.mjs"
 
 # Cursor: file-backed global rules are distributed as a local plugin.
 # This avoids modifying Cursor's cloud-managed User Rules or internal database.
@@ -278,20 +270,6 @@ if [ -z "${SKIP_CURSOR:-}" ]; then
     ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
     ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
   fi
-fi
-
-# Claude Code: ~/.claude/CLAUDE.md
-if [ -z "${SKIP_CLAUDE:-}" ]; then
-  mkdir -p "$HOME_DIR/.claude"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.claude/CLAUDE.md"
-  ok "Claude Code CLAUDE.md → $AGENTS_MD"
-fi
-
-# Cline: ~/.cline/rules/AGENTS.md
-if [ -z "${SKIP_CLINE:-}" ]; then
-  mkdir -p "$HOME_DIR/.cline/rules"
-  ln -sfn "$AGENTS_MD" "$HOME_DIR/.cline/rules/AGENTS.md"
-  ok "Cline AGENTS.md → $AGENTS_MD (and ~/.agents/AGENTS.md native)"
 fi
 
 # ─── Step 5: RTK (Rust Token Killer) ─────────────────────────────────────────

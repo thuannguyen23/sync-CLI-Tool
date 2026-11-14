@@ -94,7 +94,9 @@ done
 for base in   "$HOME_DIR/.gemini/config" "$HOME_DIR/.gemini/antigravity-cli"   "$HOME_DIR/.gemini/antigravity-ide" "$HOME_DIR/.gemini/antigravity"   "$HOME_DIR/.codex" "${CODEX_HOME:-$HOME_DIR/.codex}"   "$HOME_DIR/.config/opencode" "$HOME_DIR/.config/kilo"   "$HOME_DIR/.claude" "$HOME_DIR/.cline" "$HOME_DIR/.cursor"; do
   remove_symlink "$base/AGENTS.md"
   remove_symlink "$base/CLAUDE.md"
+  remove_symlink "$base/WORKFLOW.md"
   remove_symlink "$base/rules/AGENTS.md"
+  remove_symlink "$base/rules/WORKFLOW.md"
   remove_symlink "$base/rules/antigravity-code-review.md"
   for skill_dir in "$AGENTS_DIR"/skills/*/; do
     [ -d "$skill_dir" ] || continue

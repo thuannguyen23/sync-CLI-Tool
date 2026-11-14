@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, symlinkSync, lstatSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -402,3 +402,149 @@ test('Codex never exposes resolved credentials in CLI arguments', t => {
   assert.ok(commands.some(c=>c.includes(join(pkg,'hook.mjs'))));
   assert.ok(!commands.some(c=>c.includes('/old/')||c.includes('context-mode hook codex')));
  });
+
+
+test('rules sync distributes one canonical policy to all three agents twice', t => {
+  const f = fixture(t, ['AGY', 'CODEX', 'OPENCODE']);
+  const dirs = [f.profile, join(f.home, '.codex'), join(f.home, '.gemini/config'), join(f.home, '.config/opencode')];
+  const personal = join(f.profile, 'AGENTS.md');
+  f.write(personal, 'personal rules must be backed up\n');
+  for (let round = 0; round < 2; round++) {
+    const r = f.run('sync-rules.mjs');
+    assert.equal(r.status, 0, r.stderr);
+    for (const dir of dirs) {
+      for (const file of ['AGENTS.md']) {
+        assert.equal(realpathSync(join(dir, file)), realpathSync(join(repo, 'rules', file)));
+      }
+    }
+  }
+  assert.equal(readFileSync(personal + '.bak', 'utf8'), 'personal rules must be backed up\n');
+  assert.equal(existsSync(join(f.home, '.claude')), false);
+  for (const dir of dirs) assert.equal(existsSync(join(dir, 'WORKFLOW.md')), false);
+});
+
+test('rules sync archives only the exact obsolete context-mode file and is idempotent', t => {
+  const f = fixture(t, ['AGY']);
+  const legacy = readFileSync(new URL('./fixtures/legacy-context-mode-GEMINI.md', import.meta.url));
+  const file = join(f.home, '.gemini/GEMINI.md');
+  f.write(file, legacy.toString());
+  for (let round = 0; round < 2; round++) {
+    const r = f.run('sync-rules.mjs');
+    assert.equal(r.status, 0, r.stderr);
+  }
+  assert.equal(existsSync(file), false);
+  assert.deepEqual(readFileSync(file + '.legacy-context-mode.bak'), legacy);
+});
+
+test('rules sync preserves modified context-mode instructions and skipped AGY files', t => {
+  const legacy = readFileSync(new URL('./fixtures/legacy-context-mode-GEMINI.md', import.meta.url), 'utf8');
+  for (const selected of [['AGY'], ['CODEX']]) {
+    const f = fixture(t, selected);
+    const file = join(f.home, '.gemini/GEMINI.md');
+    const content = selected.includes('AGY') ? legacy + '\nPersonal rule: preserve me.\n' : legacy;
+    f.write(file, content);
+    assert.equal(f.run('sync-rules.mjs').status, 0);
+    assert.equal(readFileSync(file, 'utf8'), content);
+    assert.equal(existsSync(file + '.legacy-context-mode.bak'), false);
+  }
+});
+
+test('rules sync refuses a conflicting migration backup without deleting user content', t => {
+  const f = fixture(t, ['AGY']);
+  const legacy = readFileSync(new URL('./fixtures/legacy-context-mode-GEMINI.md', import.meta.url), 'utf8');
+  const file = join(f.home, '.gemini/GEMINI.md');
+  f.write(file, legacy);
+  f.write(file + '.legacy-context-mode.bak', 'existing backup');
+  const r = f.run('sync-rules.mjs');
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /backup differs/);
+  assert.equal(readFileSync(file, 'utf8'), legacy);
+  assert.equal(readFileSync(file + '.legacy-context-mode.bak', 'utf8'), 'existing backup');
+});
+
+test('rules sync checks the canonical policy before changing a client', t => {
+  const f = fixture(t, ['CODEX']);
+  const scripts = join(f.home, 'checkout/scripts');
+  f.write(join(f.home, 'checkout/package.json'), { type: 'module' });
+  f.write(join(f.home, 'checkout/rules/WORKFLOW.md'), 'obsolete fixture workflow');
+  mkdirSync(scripts, { recursive: true });
+  for (const name of ['sync-rules.mjs', 'config-utils.mjs']) copyFileSync(join(repo, 'scripts', name), join(scripts, name));
+  const r = spawnSync(process.execPath, [join(scripts, 'sync-rules.mjs')], { env: f.env, encoding: 'utf8' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /Missing canonical instruction source/);
+  assert.equal(existsSync(join(f.profile, 'AGENTS.md')), false);
+});
+
+
+test('setup rules step uses one policy and preserves personal rules for other supported hosts', t => {
+  const f = fixture(t, ['KILO', 'CLAUDE', 'CLINE']);
+  const cases = [['.config/kilo', 'AGENTS.md'], ['.claude', 'CLAUDE.md'], ['.cline/rules', 'AGENTS.md']];
+  for (const [dir, file] of cases) f.write(join(f.home, dir, file), 'personal rules');
+  const source = readFileSync(join(repo, 'setup.sh'), 'utf8');
+  const begin = source.indexOf('# ─── Step 4:');
+  const end = source.indexOf('# ─── Step 5:');
+  assert.ok(begin >= 0 && end > begin);
+  const step = source.slice(begin, end);
+  const r = spawnSync('bash', ['-c', 'section(){ :; }; ok(){ :; }; info(){ :; }; warn(){ :; }; err(){ echo "$*" >&2; }; HOME_DIR="$HOME"; ' + step], {
+    cwd: repo, env: { ...f.env, AGENTS_DIR: repo }, encoding: 'utf8', timeout: 15000,
+  });
+  assert.equal(r.status, 0, r.stderr);
+  for (const [dir, file] of cases) {
+    assert.equal(realpathSync(join(f.home, dir, file)), realpathSync(join(repo, 'rules/AGENTS.md')));
+    assert.equal(existsSync(join(f.home, dir, 'WORKFLOW.md')), false);
+    assert.equal(readFileSync(join(f.home, dir, file) + '.bak', 'utf8'), 'personal rules');
+  }
+});
+
+
+test('rules sync runs without a workflow source and removes its dangling managed link', t => {
+  const f = fixture(t, ['CODEX']);
+  const checkout = join(f.home, 'checkout');
+  f.write(join(checkout, 'package.json'), { type: 'module' });
+  f.write(join(checkout, 'rules/AGENTS.md'), 'standalone canonical policy');
+  mkdirSync(join(checkout, 'scripts'), { recursive: true });
+  for (const name of ['sync-rules.mjs', 'config-utils.mjs']) copyFileSync(join(repo, 'scripts', name), join(checkout, 'scripts', name));
+  mkdirSync(f.profile, { recursive: true });
+  const link = join(f.profile, 'WORKFLOW.md');
+  symlinkSync(join(checkout, 'rules/WORKFLOW.md'), link);
+  assert.equal(existsSync(link), false); // Dangling, but lstat must still see it.
+  const r = spawnSync(process.execPath, [join(checkout, 'scripts/sync-rules.mjs')], { env: f.env, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(readFileSync(join(f.profile, 'AGENTS.md'), 'utf8'), 'standalone canonical policy');
+  assert.throws(() => lstatSync(link), { code: 'ENOENT' });
+});
+
+test('rules sync retires only owned workflow links even when policy is already linked', t => {
+  const f = fixture(t, ['AGY', 'CODEX', 'OPENCODE']);
+  mkdirSync(f.profile, { recursive: true });
+  symlinkSync(join(repo, 'rules/AGENTS.md'), join(f.profile, 'AGENTS.md'));
+  const owned = join(f.profile, 'WORKFLOW.md');
+  symlinkSync(join(repo, 'rules/WORKFLOW.md'), owned);
+  const alias = join(f.home, 'checkout-alias');
+  symlinkSync(repo, alias);
+  mkdirSync(join(f.home, '.codex'), { recursive: true });
+  const aliasLink = join(f.home, '.codex/WORKFLOW.md');
+  symlinkSync(join(alias, 'rules/WORKFLOW.md'), aliasLink);
+  const personal = join(f.home, '.gemini/config/WORKFLOW.md');
+  f.write(personal, 'personal workflow');
+  const unrelated = join(f.home, '.config/opencode/WORKFLOW.md');
+  mkdirSync(join(unrelated, '..'), { recursive: true });
+  symlinkSync(join(f.home, 'missing-personal-workflow'), unrelated);
+  for (let round = 0; round < 2; round++) {
+    const r = f.run('sync-rules.mjs');
+    assert.equal(r.status, 0, r.stderr);
+  }
+  for (const file of [owned, aliasLink]) assert.throws(() => lstatSync(file), { code: 'ENOENT' });
+  assert.equal(readFileSync(personal, 'utf8'), 'personal workflow');
+  assert.ok(lstatSync(unrelated).isSymbolicLink());
+});
+
+test('rules sync leaves skipped hosts old workflow links intact', t => {
+  const f = fixture(t, ['CODEX']);
+  const link = join(f.home, '.gemini/config/WORKFLOW.md');
+  mkdirSync(join(link, '..'), { recursive: true });
+  symlinkSync(join(repo, 'rules/WORKFLOW.md'), link);
+  const r = f.run('sync-rules.mjs');
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(lstatSync(link).isSymbolicLink());
+});

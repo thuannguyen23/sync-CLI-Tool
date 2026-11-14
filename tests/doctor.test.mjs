@@ -173,3 +173,28 @@ test('doctor recognizes native Codex RTK without executing it', t => {
  writeFileSync(join(f.home,'.codex/hooks.json'),JSON.stringify({hooks:{PreToolUse:[{matcher:'^Bash$',hooks:[{type:'command',command:`'${binary}' hook codex`}]}]}}));
  const r=f.run();assert.equal(r.status,0,r.stderr);assert.match(r.stdout,/Codex RTK: Native RTK event, matcher and binary checked; execution not tested/);
 });
+
+
+test('doctor detects policy drift without requiring a workflow document across the three clients without changing files', t => {
+  const f = fixture(t);
+  const source = join(f.home, '.agents/rules');
+  const dirs = [join(f.home, '.codex'), join(f.home, '.gemini/config'), join(f.home, '.config/opencode')];
+  mkdirSync(source, { recursive: true });
+  for (const file of ['AGENTS.md']) {
+    writeFileSync(join(source, file), 'canonical ' + file);
+    for (const dir of dirs) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, file), 'canonical ' + file);
+    }
+  }
+  let r = f.run();
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Instructions Codex active\/AGENTS.md: Matches canonical content/);
+  assert.match(r.stdout, /model loading not tested/);
+  const drift = join(dirs[2], 'AGENTS.md');
+  writeFileSync(drift, 'different workflow');
+  r = f.run();
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /\[ERROR\] Instructions OpenCode\/AGENTS.md: Differs/);
+  assert.equal(readFileSync(drift, 'utf8'), 'different workflow');
+});

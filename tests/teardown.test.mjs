@@ -46,3 +46,21 @@ test('teardown resolves managed sources through .agents before removing the root
  mkdirSync(join(f.home,'.codex/skills'),{recursive:true});const link=join(f.home,'.codex/skills/brainstorming');symlinkSync(join(f.home,'.agents/skills/brainstorming'),link);
  const r=f.run();assert.equal(r.status,0,r.stderr);assert.throws(()=>lstatSync(link),{code:'ENOENT'});assert.throws(()=>lstatSync(join(f.home,'.agents')),{code:'ENOENT'});
 });
+
+test('teardown removes managed workflow links across hosts and preserves personal workflows', t => {
+  const f = fixture(t);
+  const owned = ['.gemini/config', '.config/opencode', 'active codex', '.cline/rules'];
+  for (const base of owned) {
+    mkdirSync(join(f.home, base), { recursive: true });
+    symlinkSync(join(repo, 'rules/WORKFLOW.md'), join(f.home, base, 'WORKFLOW.md'));
+  }
+  const personal = f.write('.codex/WORKFLOW.md', 'personal workflow');
+  const target = f.write('personal-workflow-source', 'private workflow');
+  mkdirSync(join(f.home, '.claude'), { recursive: true });
+  symlinkSync(target, join(f.home, '.claude/WORKFLOW.md'));
+  const r = f.run();
+  assert.equal(r.status, 0, r.stderr);
+  for (const base of owned) assert.throws(() => lstatSync(join(f.home, base, 'WORKFLOW.md')), { code: 'ENOENT' });
+  assert.equal(readFileSync(personal, 'utf8'), 'personal workflow');
+  assert.equal(readFileSync(join(f.home, '.claude/WORKFLOW.md'), 'utf8'), 'private workflow');
+});
