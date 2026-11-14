@@ -387,6 +387,42 @@ function syncAgy(ctxPkgDir) {
     return
   }
 
+  // AGY's legacy adapter is pinned separately from the global v2 installation.
+  const agyRoot = join(HOME, '.local/share/sync-cli-tool/context-mode-agy/node_modules')
+  const agyPkg = join(agyRoot, 'context-mode')
+  const agyBin = join(agyRoot, '.bin/context-mode')
+  const agySrc = join(agyPkg, 'configs/antigravity-cli')
+  if (existsSync(agyBin) && existsSync(join(agySrc, 'plugin.json')) &&
+      readJSON(join(agyPkg, 'package.json')).version === '1.0.169') {
+    for (const base of ['config', 'antigravity-cli']) {
+    const dst = join(HOME, '.gemini', base, 'plugins/context-mode')
+    cpSync(agySrc, dst, { recursive: true, force: true })
+    normalizeAgyContextRule(dst)
+    normalizeAgyContextHooks(dst)
+    const hookFile = join(dst, 'hooks.json')
+    const hooks = readJSON(hookFile)
+    for (const groups of Object.values(hooks.hooks || {})) {
+      for (const group of groups) for (const hook of (group.hooks || [group])) {
+        if (hook.command?.startsWith('context-mode ')) hook.command = `CONTEXT_MODE_DIR=${shellQuote(join(HOME, '.local/state/sync-cli-tool/context-mode-agy-data'))} ` + shellQuote(agyBin) + hook.command.slice('context-mode'.length)
+      }
+    }
+    writeJSON(hookFile, hooks)
+    const entry = { command: agyBin, args: [], env: { CONTEXT_MODE_PLATFORM: 'antigravity-cli', CONTEXT_MODE_DIR: join(HOME, '.local/state/sync-cli-tool/context-mode-agy-data') } }
+    writeJSON(join(dst, 'mcp_config.json'), { mcpServers: { 'context-mode': entry } })
+    }
+    const entry = { command: agyBin, args: [], env: { CONTEXT_MODE_PLATFORM: 'antigravity-cli', CONTEXT_MODE_DIR: join(HOME, '.local/state/sync-cli-tool/context-mode-agy-data') } }
+    for (const base of ['config', 'antigravity-cli']) {
+      const file = join(HOME, '.gemini', base, 'mcp_config.json')
+      const config = readJSON(file) || {}
+      config.mcpServers ||= {}
+      config.mcpServers['context-mode'] = entry
+      writeJSON(file, config)
+    }
+    if (hasCmd('agy')) execFileSync('agy', ['plugin', 'enable', 'context-mode'], { stdio: 'pipe' })
+    ok('AGY      context-mode v1 isolated plugin and MCP configured')
+    return
+  }
+
   const ctxVersion = existsSync(join(ctxPkgDir, 'package.json')) ? readJSON(join(ctxPkgDir, 'package.json')).version : ''
   if (Number.parseInt(ctxVersion, 10) >= 2) {
     const legacy = ['config', 'antigravity-cli', 'antigravity-ide'].some(base => {

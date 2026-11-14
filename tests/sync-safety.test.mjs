@@ -359,6 +359,30 @@ test('OpenCode migrates context-mode v2 into native servers and current plugin',
   assert.equal(readFileSync(join(f.home,'opencode-reloaded'),'utf8'),'reloaded');
 });
 
+test('AGY selects isolated v1 while retaining unrelated MCP entries', t => {
+  const f = fixture(t, ['AGY']); const pkg=join(f.home,'npm/context-mode');
+  const legacy=join(f.home,'.local/share/sync-cli-tool/context-mode-agy/node_modules/context-mode');
+  const bin=join(f.home,'.local/share/sync-cli-tool/context-mode-agy/node_modules/.bin/context-mode');
+  f.write(join(pkg,'package.json'),{version:'2.1.5'});
+  f.write(join(legacy,'package.json'),{version:'1.0.169'});
+  f.write(join(legacy,'configs/antigravity-cli/plugin.json'),{name:'context-mode',version:'1.0.169'});
+  f.write(join(legacy,'configs/antigravity-cli/hooks.json'),{hooks:{PreToolUse:[{matcher:'run_command',hooks:[{type:'command',command:'context-mode hook antigravity-cli pretooluse'}]}]}});
+  f.write(join(legacy,'configs/antigravity-cli/mcp_config.json'),{mcpServers:{'context-mode':{command:'context-mode'}}});
+  f.write(bin,'#!/bin/sh\nexit 0\n');
+  f.write(join(f.bin,'agy'),'#!/bin/sh\nexit 0\n');
+  spawnSync('chmod',['+x',join(f.bin,'agy')]);
+  f.write(join(f.bin,'npm'),'#!/bin/sh\necho "'+join(f.home,'npm')+'"\n');
+  f.write(join(f.bin,'context-mode'),'#!/bin/sh\nexit 0\n');
+  spawnSync('chmod',['+x',bin,join(f.bin,'npm'),join(f.bin,'context-mode')]);
+  const config=join(f.home,'.gemini/antigravity-cli/mcp_config.json');
+  f.write(config,{mcpServers:{'context-mode':{command:'old'},personal:{command:'other'}}});
+  const r=f.run('sync-hooks.mjs'); assert.equal(r.status,0,r.stderr);
+  const d=JSON.parse(readFileSync(config)); assert.equal(d.mcpServers['context-mode'].command,bin); assert.equal(d.mcpServers.personal.command,'other');
+  const hook=JSON.parse(readFileSync(join(f.home,'.gemini/antigravity-cli/plugins/context-mode/hooks.json')));
+  assert.match(hook.hooks.PreToolUse[0].hooks[0].command,/context-mode-agy/);
+  assert.equal(f.run('sync-hooks.mjs').status,0);
+});
+
 test('AGY registers context-mode v2 directly and preserves other MCP entries', t => {
   const f = fixture(t, ['AGY']); const pkg=join(f.home,'npm/context-mode');
   f.write(join(pkg,'package.json'),{version:'2.1.5'});

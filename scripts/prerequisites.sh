@@ -122,6 +122,15 @@ else
   fi
 fi
 
+# AGY uses a separately pinned legacy adapter; other agents keep global v2.
+if [ -z "${SKIP_AGY:-}" ]; then
+  section "context-mode for AGY"
+  if ! node "$PREREQ_AGENTS_DIR/scripts/install-agy-context-mode.mjs"; then
+    err "AGY context-mode v1 installation failed; setup cannot configure AGY"
+    ERRORS=$((ERRORS+1))
+  fi
+fi
+
 # ─── agent-browser (Fast browser automation CLI) ────────────────────────
 section "agent-browser"
 if has agent-browser; then

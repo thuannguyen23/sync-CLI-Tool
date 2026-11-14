@@ -110,7 +110,7 @@ echo -e "${BOLD}🚀 sync-CLI-Tool setup${NC}"
 echo "=============================="
 
 echo -e "\n${BOLD}━━ Interactive Selection ━━${NC}"
-[ -d "$HOME_DIR/.gemini" ] && agy_found=true || agy_found=false
+has agy || [ -d "$HOME_DIR/.gemini" ] && agy_found=true || agy_found=false
 [ -d "$HOME_DIR/.cursor" ] || [ -d "$HOME_DIR/.config/Cursor" ] && cursor_found=true || cursor_found=false
 has codex || [ -d "$HOME_DIR/.codex" ] && codex_found=true || codex_found=false
 has opencode || [ -d "$HOME_DIR/.config/opencode" ] && opencode_found=true || opencode_found=false
@@ -356,7 +356,7 @@ echo "  Skills:       ~/.agents/skills/ (symlinked to AGY, Cursor, Codex, Claude
 echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Kilo, Cursor plugin, Claude Code, Cline)"
 echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex, Kilo, Cline, Claude Code"
 echo "  RTK:          hook (Cursor, Claude Code), plugin (OpenCode), RTK.md (Codex, Kilo), rules (AGY, Cline)"
-echo "  Context-mode: MCP compatibility mode (AGY), native adapters (Codex, OpenCode); other adapters require verification"
+echo "  Context-mode: pinned v1 plugin (AGY CLI), native v2 adapters (Codex, OpenCode); other adapters require verification"
 echo "  Herdr:        sessionStart hooks (Cursor, Codex)"
 echo ""
 echo "  When you add a new MCP server:"
