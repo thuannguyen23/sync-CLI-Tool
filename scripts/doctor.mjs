@@ -12,6 +12,7 @@ import { homedir } from 'node:os';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { loadSecrets, prepareServer } from './mcp-runtime.mjs';
 import { openCodeConfigPath, readConfig } from './config-utils.mjs';
+import { agentPaths } from './agent-paths.mjs';
 
 const home = homedir();
 const agentsDir = join(home, '.agents');
@@ -98,11 +99,9 @@ function inspectRules() {
     report('UNVERIFIED', 'Shared instructions', 'Canonical rules directory not found');
     return;
   }
-  const targets = [
-    ['Codex active', codexDir],
-    ['AGY Global', join(home, '.gemini', 'config')],
-    ['OpenCode', join(home, '.config', 'opencode')],
-  ];
+  const targets = agentPaths(home, codexDir).map(({ name, directory }) => [
+    directory === codexDir ? 'Codex active' : name, directory,
+  ]);
   for (const file of ['AGENTS.md']) {
     const canonical = join(source, file);
     if (!existsSync(canonical)) {
@@ -149,19 +148,7 @@ function inspectSkills() {
     return;
   }
 
-  const targets = [
-    ['AGY Global', join(home, '.gemini', 'config', 'skills')],
-    ['AGY CLI', join(home, '.gemini', 'antigravity-cli', 'skills')],
-    ['AGY IDE', join(home, '.gemini', 'antigravity-ide', 'skills')],
-    ['AGY App', join(home, '.gemini', 'antigravity', 'skills')],
-    ['Codex default', join(home, '.codex', 'skills')],
-    ['Codex active', join(codexDir, 'skills')],
-    ['Claude Code', join(home, '.claude', 'skills')],
-    ['Cline', join(home, '.cline', 'skills')],
-    ['OpenCode', join(home, '.config', 'opencode', 'skills')],
-    ['Cursor CLI', join(home, '.cursor', 'skills')],
-  ];
-
+  const targets = agentPaths(home, codexDir).map(({ name, directory }) => [name, join(directory, 'skills')]);
   const visited = new Set();
   for (const [name, target] of targets) {
     if (visited.has(target) || !existsSync(target)) continue;
@@ -270,8 +257,6 @@ function inspectCodexRtk(hooks) {
 function inspectHooks() {
   const targets = [
     ['Codex', join(codexDir, 'hooks.json'), 'rtk_pre_tool_use.py'],
-    ['Cursor', join(home, '.cursor', 'hooks.json'), 'rtk hook cursor'],
-    ['Claude Code', join(home, '.claude', 'settings.json'), 'rtk hook claude'],
   ];
 
   for (const [name, path, rtkIdentifier] of targets) {
@@ -296,7 +281,7 @@ function inspectHooks() {
     }
   }
 
-  report('UNVERIFIED', 'Other clients', 'Hook adapters are not inspected by this version');
+  report('UNVERIFIED', 'Antigravity hooks', 'Plugin configuration and actual hook execution require a separate runtime check');
 }
 
 function inspectOpenCode() {

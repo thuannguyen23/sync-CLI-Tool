@@ -21,12 +21,12 @@ test('teardown preserves personal regular files and unrelated symlinks without b
   for(const file of ['.cursor/mcp.json','.gemini/config/AGENTS.md','.codex/AGENTS.md','active codex/AGENTS.md','.claude/CLAUDE.md']) assert.equal(readFileSync(join(f.home,file),'utf8'),file.endsWith('CLAUDE.md')?'private':'personal');
 });
 test('backup restoration is explicit and keeps the current configuration recoverable', t => {
-  const f=fixture(t), file=f.write('.cursor/mcp.json','current'); f.write('.cursor/mcp.json.bak','original');
+  const f=fixture(t), file=f.write('.config/opencode/opencode.json','current'); f.write('.config/opencode/opencode.json.bak','original');
   assert.equal(f.run().status,0); assert.equal(readFileSync(file,'utf8'),'current');
   const r=f.run('--restore-backups'); assert.equal(r.status,0,r.stderr);
   assert.equal(readFileSync(file,'utf8'),'original');
-  const saved=readdirSync(join(f.home,'.cursor')).filter(n=>n.startsWith('mcp.json.before-teardown.'));
-  assert.equal(saved.length,1); assert.equal(readFileSync(join(f.home,'.cursor',saved[0]),'utf8'),'current');
+  const saved=readdirSync(join(f.home,'.config/opencode')).filter(n=>n.startsWith('opencode.json.before-teardown.'));
+  assert.equal(saved.length,1); assert.equal(readFileSync(join(f.home,'.config/opencode',saved[0]),'utf8'),'current');
   assert.ok(existsSync(file+'.bak'));
 });
 test('teardown removes only repository-owned skill links in both Codex homes', t => {
@@ -49,7 +49,7 @@ test('teardown resolves managed sources through .agents before removing the root
 
 test('teardown removes managed workflow links across hosts and preserves personal workflows', t => {
   const f = fixture(t);
-  const owned = ['.gemini/config', '.config/opencode', 'active codex', '.cline/rules'];
+  const owned = ['.gemini/config', '.config/opencode', 'active codex', '.gemini/antigravity-cli'];
   for (const base of owned) {
     mkdirSync(join(f.home, base), { recursive: true });
     symlinkSync(join(repo, 'rules/WORKFLOW.md'), join(f.home, base, 'WORKFLOW.md'));

@@ -4,17 +4,8 @@
 # Can be cloned anywhere — creates ~/.agents symlink automatically.
 # Run: ~/sync-CLI-Tool/setup.sh  (or wherever you cloned it)
 #
-# What it does:
-#   0. Create ~/.agents symlink → this folder (needed by OpenCode skill discovery)
-#   1. Check/install prerequisites (nvm, uv, rtk, codegraph)
-#   2. Create secrets.env from template if missing
-#   3. Symlink skills → all 4 tool locations
-#   4. Install global agent workflow rules for all 4 tools
-#   5. Symlink / copy OpenCode rtk.ts plugin
-#   6. Sync MCP configs (servers.json → 4 tool-specific formats)
-#   7. Write hooks.json for Codex and Cursor
-#   8. Print summary
-
+# Supports Codex, Antigravity (CLI/IDE/App), and OpenCode only.
+# Bootstrap may install prerequisites and write selected host configuration.
 set -euo pipefail
 umask 077
 
@@ -111,20 +102,12 @@ echo "=============================="
 
 echo -e "\n${BOLD}━━ Interactive Selection ━━${NC}"
 has agy || [ -d "$HOME_DIR/.gemini" ] && agy_found=true || agy_found=false
-[ -d "$HOME_DIR/.cursor" ] || [ -d "$HOME_DIR/.config/Cursor" ] && cursor_found=true || cursor_found=false
 has codex || [ -d "$HOME_DIR/.codex" ] && codex_found=true || codex_found=false
 has opencode || [ -d "$HOME_DIR/.config/opencode" ] && opencode_found=true || opencode_found=false
-has kilo || [ -d "$HOME_DIR/.config/kilo" ] && kilo_found=true || kilo_found=false
-has cline || [ -d "$HOME_DIR/.cline" ] || [ -d "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev" ] && cline_found=true || cline_found=false
-has claude || [ -d "$HOME_DIR/.claude" ] || [ -f "$HOME_DIR/.claude.json" ] && claude_found=true || claude_found=false
 
-ask_install "AGY (Gemini)" $agy_found || export SKIP_AGY=1
-ask_install "Cursor" $cursor_found || export SKIP_CURSOR=1
+ask_install "Antigravity" $agy_found || export SKIP_AGY=1
 ask_install "Codex" $codex_found || export SKIP_CODEX=1
 ask_install "OpenCode" $opencode_found || export SKIP_OPENCODE=1
-ask_install "Kilo" $kilo_found || export SKIP_KILO=1
-ask_install "Cline" $cline_found || export SKIP_CLINE=1
-ask_install "Claude Code" $claude_found || export SKIP_CLAUDE=1
 
 # ─── Step 0: ~/.agents symlink ───────────────────────────────────────────────
 # Many tools (OpenCode, etc.) expect skills at ~/.agents/skills/
@@ -171,158 +154,21 @@ fi
 
 # ─── Step 3: Skills symlinks ─────────────────────────────────────────────────
 section "3 / 7  Skills (symlinks)"
-SKILLS_SRC="$AGENTS_DIR/skills"
-
-# Use the same selected-agent sync code as npm run sync.
-SKIP_CURSOR=1 SKIP_KILO=1 SKIP_CLINE=1 SKIP_CLAUDE=1 \
-  node "$AGENTS_DIR/scripts/sync-skills.mjs"
-
-# Cursor: ~/.config/Cursor/User/skills → ~/.agents/skills
-if [ -z "${SKIP_CURSOR:-}" ]; then
-  mkdir -p "$HOME_DIR/.config/Cursor/User"
-  if [ -L "$HOME_DIR/.config/Cursor/User/skills" ]; then
-    ok "Cursor skills symlink already exists"
-  elif [ -d "$HOME_DIR/.config/Cursor/User/skills" ] && [ ! -L "$HOME_DIR/.config/Cursor/User/skills" ]; then
-    warn "Cursor: skills dir exists (real) — moving to .bak"
-    mv "$HOME_DIR/.config/Cursor/User/skills" "$HOME_DIR/.config/Cursor/User/skills.bak"
-    ln -s "$SKILLS_SRC" "$HOME_DIR/.config/Cursor/User/skills"
-    ok "Cursor skills → $SKILLS_SRC (old dir backed up)"
-  else
-    ln -sfn "$SKILLS_SRC" "$HOME_DIR/.config/Cursor/User/skills"
-    ok "Cursor skills → $SKILLS_SRC"
-  fi
-else
-  info "Cursor skills sync skipped."
-fi
-
-# Kilo reads ~/.agents/skills natively (Agent Skills spec), same as OpenCode
-if [ -z "${SKIP_KILO:-}" ]; then
-  ok "Kilo skills: reads ~/.agents/skills natively (no symlink needed)"
-else
-  info "Kilo skills sync skipped."
-fi
-
-# Claude Code: ~/.claude/skills/<name>
-if [ -z "${SKIP_CLAUDE:-}" ]; then
-  mkdir -p "$HOME_DIR/.claude/skills"
-  for skill_dir in "$SKILLS_SRC"/*/; do
-    skill_name="$(basename "$skill_dir")"
-    target="$HOME_DIR/.claude/skills/$skill_name"
-    if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
-  done
-  ok "Claude Code skills linked to ~/.claude/skills/"
-else
-  info "Claude Code skills sync skipped."
-fi
-
-# Cline: reads ~/.agents/skills natively + symlinks to ~/.cline/skills
-if [ -z "${SKIP_CLINE:-}" ]; then
-  mkdir -p "$HOME_DIR/.cline/skills"
-  for skill_dir in "$SKILLS_SRC"/*/; do
-    skill_name="$(basename "$skill_dir")"
-    target="$HOME_DIR/.cline/skills/$skill_name"
-    if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
-  done
-  ok "Cline skills: linked to ~/.cline/skills/ (and ~/.agents/skills native)"
-else
-  info "Cline skills sync skipped."
-fi
-
+# Use the same selected-host distributor as npm run sync.
+node "$AGENTS_DIR/scripts/sync-skills.mjs"
 # ─── Step 4: AGENTS.md symlinks ──────────────────────────────────────────────
 section "4 / 7  AGENTS.md (global instructions)"
-AGENTS_MD="$AGENTS_DIR/rules/AGENTS.md"
 
 # Preserve personal rules and respect CODEX_HOME using the shared adapter.
 node "$AGENTS_DIR/scripts/sync-rules.mjs"
 
-# Cursor: file-backed global rules are distributed as a local plugin.
-# This avoids modifying Cursor's cloud-managed User Rules or internal database.
-if [ -z "${SKIP_CURSOR:-}" ]; then
-  CURSOR_PLUGIN_SRC="$AGENTS_DIR/plugins/cursor"
-  CURSOR_PLUGIN_DST="$HOME_DIR/.cursor/plugins/local/sync-cli-tool"
-  mkdir -p "$HOME_DIR/.cursor/plugins/local"
-
-  # Sync cursor workflow rule directly from AGENTS_MD with frontmatter
-  {
-    echo "---"
-    echo "alwaysApply: true"
-    echo "---"
-    echo ""
-    cat "$AGENTS_MD"
-  } > "$CURSOR_PLUGIN_SRC/rules/agent-workflow.mdc"
-
-  if [ -L "$CURSOR_PLUGIN_DST" ]; then
-    ln -sfn "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
-    ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
-  elif [ -e "$CURSOR_PLUGIN_DST" ]; then
-    CURSOR_PLUGIN_BACKUP="$CURSOR_PLUGIN_DST.bak"
-    if [ -e "$CURSOR_PLUGIN_BACKUP" ] || [ -L "$CURSOR_PLUGIN_BACKUP" ]; then
-      err "Cursor plugin backup already exists: $CURSOR_PLUGIN_BACKUP"
-      err "Move or remove it, then re-run setup.sh"
-    else
-      mv "$CURSOR_PLUGIN_DST" "$CURSOR_PLUGIN_BACKUP"
-      ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
-      ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC (old plugin backed up)"
-    fi
-  else
-    ln -s "$CURSOR_PLUGIN_SRC" "$CURSOR_PLUGIN_DST"
-    ok "Cursor global workflow plugin → $CURSOR_PLUGIN_SRC"
-  fi
-fi
-
 # ─── Step 5: RTK (Rust Token Killer) ─────────────────────────────────────────
-# Each agent gets RTK through its native mechanism:
-#   Cursor  → hook (rtk init merges into hooks.json, preserves existing hooks)
-#   Codex   → native rtk hook codex (registered in Step 7)
-#   AGY     → native rtk hook antigravity plugin (Step 7)
-#   OpenCode → TypeScript plugin (symlinked from repo for version control)
-#   Kilo    → prompt rule in AGENTS.md
-#   Claude Code → hook (rtk hook claude in ~/.claude/settings.json)
-#   Cline   → prompt rule compiled in AGENTS.md
 section "5 / 7  RTK (Rust Token Killer)"
 if has rtk; then
-  # Cursor: merge RTK hook into hooks.json (hook-only = no RTK.md clutter)
-  if [ -z "${SKIP_CURSOR:-}" ]; then
-    rtk init -g --agent cursor --hook-only --auto-patch 2>/dev/null \
-      && ok "RTK → Cursor (hook merged into hooks.json)" \
-      || info "RTK → Cursor (already configured)"
-  fi
-
-  # Codex: RTK is already compiled into AGENTS.md (clean up any duplicate RTK.md)
-  if [ -z "${SKIP_CODEX:-}" ]; then
-    rm -f "$HOME_DIR/.codex/RTK.md" 2>/dev/null || true
-    info "RTK → Codex native hook will be synchronized in Step 7"
-  fi
-
-  # AGY: RTK is already compiled into AGENTS.md
-  if [ -z "${SKIP_AGY:-}" ]; then
-    info "RTK → AGY native plugin will be synchronized in Step 7"
-  fi
-
-  # OpenCode RTK installation is handled by sync-hooks.mjs in Step 7.
-
-  # Kilo: RTK is already in AGENTS.md (clean up any duplicate RTK.md)
-  if [ -z "${SKIP_KILO:-}" ]; then
-    rm -f "$HOME_DIR/.config/kilo/RTK.md" 2>/dev/null || true
-    ok "RTK → Kilo (integrated in AGENTS.md)"
-  fi
-
-  # Claude Code: merge RTK hook into ~/.claude/settings.json
-  if [ -z "${SKIP_CLAUDE:-}" ]; then
-    rtk init -g --agent claude --hook-only --auto-patch 2>/dev/null \
-      && ok "RTK → Claude Code (hook merged into ~/.claude/settings.json)" \
-      || info "RTK → Claude Code (already configured or hook applied)"
-  fi
-
-  # Cline: RTK is already in AGENTS.md
-  if [ -z "${SKIP_CLINE:-}" ]; then
-    ok "RTK → Cline (integrated in AGENTS.md)"
-  fi
+  info "Native RTK hooks/plugins for selected hosts will be synchronized in Step 7"
 else
-  warn "rtk not found — skipping RTK setup for all agents"
-  info "Install RTK: cargo install rtk"
+  warn "rtk not found — RTK hooks will be skipped"
 fi
-
 # ─── Step 6: MCP sync ────────────────────────────────────────────────────────
 section "6 / 7  MCP configs"
 if has node; then
@@ -334,9 +180,7 @@ fi
 
 # ─── Step 7: Context-mode + Herdr hooks ──────────────────────────────────────
 # Merges context-mode hooks + herdr hooks into each agent's config.
-# Runs AFTER sync-mcp.mjs because it adds context-mode MCP to Cursor's
-# mcp.json (which sync-mcp.mjs overwrites with shared servers).
-# Preserves RTK hooks added in Step 5.
+# Runs after the shared MCP sync; native adapters preserve personal entries.
 section "7 / 7  Context-mode + Herdr hooks"
 if has node; then
   node "$AGENTS_DIR/scripts/sync-hooks.mjs"
@@ -357,7 +201,6 @@ echo ""
 echo "  When you add a new MCP server:"
 echo -e "  ${DIM}1. Edit ~/.agents/mcp/servers.json${NC}"
 echo -e "  ${DIM}2. Run: ~/.agents/setup.sh${NC}"
-echo -e "  ${DIM}3. git -C ~/.agents push${NC}"
 echo ""
 echo "  On a new machine:"
 echo -e "  ${DIM}git clone <your-dotfiles-repo> ~/.agents && ~/.agents/setup.sh${NC}"

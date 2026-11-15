@@ -31,25 +31,12 @@ test('AGY allowlists only its managed skills and writes valid rule frontmatter',
   assert.match(source, /legacy context-mode rule symlink removed/)
 })
 
-test('Cursor allowlists the read-only Codegraph exploration tool', () => {
-  assert.match(source, /Mcp\(codegraph:codegraph_explore\)/)
-  assert.match(source, /cli-config\.json/)
-})
-
-test('sync-hooks configures Claude Code hooks in ~/.claude/settings.json', () => {
-  assert.match(source, /syncClaude/)
-  assert.match(source, /\.claude/)
-  assert.match(source, /settings\.json/)
-  assert.match(source, /rtk hook claude/)
-})
-
 test('AGY IDE receives context-mode MCP server configuration', () => {
   assert.match(source, /\.gemini', 'antigravity', 'mcp_config\.json'/)
   assert.match(source, /mcpConfig\.mcpServers\['context-mode'\]/)
 })
 
-test('sync-hooks configures RTK hooks for Cursor, AGY, and Codex', () => {
-  assert.match(source, /rtk hook cursor/)
+test('sync-hooks configures RTK hooks for AGY and Codex', () => {
   assert.match(source, /plugins', 'antigravity', 'rtk/)
   assert.match(source, /\.gemini', 'config', 'plugins', 'rtk/)
   assert.match(source, /rtk_pre_tool_use\.py/)

@@ -147,7 +147,7 @@ fi
 
 # ─── CLI tool detection (informational — not auto-installed) ─────────────────
 section "AI CLI tools (informational)"
-for tool in agy codex opencode cursor; do
+for tool in agy codex opencode; do
   if has "$tool"; then
     ok "$tool: $(which $tool)"
   else

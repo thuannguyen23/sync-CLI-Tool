@@ -1,33 +1,20 @@
 #!/usr/bin/env node
 /**
- * sync-rules.mjs — Distribute rules/AGENTS.md and rules/CLAUDE.md to all agent environments.
+ * sync-rules.mjs — Distribute the shared policy to Codex, Antigravity and OpenCode.
  */
 
 import { existsSync, mkdirSync, lstatSync, unlinkSync, symlinkSync, readlinkSync, realpathSync, readFileSync, copyFileSync, chmodSync, constants } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { backupFile, codexHome } from './config-utils.mjs';
+import { backupFile } from './config-utils.mjs';
+
+import { selectedAgentPaths } from './agent-paths.mjs';
 
 const HOME = homedir();
 const ROOT = join(import.meta.dirname, '..');
 const AGENTS_MD = join(ROOT, 'rules', 'AGENTS.md');
 const LEGACY_WORKFLOW_MD = join(ROOT, 'rules', 'WORKFLOW.md');
-const CLAUDE_MD = join(ROOT, 'rules', 'CLAUDE.md');
-
-const targets = [
-  { name: 'AGY Global', dest: join(HOME, '.gemini', 'config', 'AGENTS.md'), src: AGENTS_MD },
-  { name: 'AGY CLI', dest: join(HOME, '.gemini', 'antigravity-cli', 'AGENTS.md'), src: AGENTS_MD },
-  { name: 'AGY IDE', dest: join(HOME, '.gemini', 'antigravity-ide', 'AGENTS.md'), src: AGENTS_MD },
-  { name: 'AGY App', dest: join(HOME, '.gemini', 'antigravity', 'AGENTS.md'), src: AGENTS_MD },
-  ...[...new Set([join(HOME, '.codex'), codexHome()])].map(dir =>
-    ({ name: 'Codex', dest: join(dir, 'AGENTS.md'), src: AGENTS_MD })),
-  { name: 'OpenCode', dest: join(HOME, '.config', 'opencode', 'AGENTS.md'), src: AGENTS_MD },
-  { name: 'Kilo', dest: join(HOME, '.config', 'kilo', 'AGENTS.md'), src: AGENTS_MD },
-  { name: 'Cline', dest: join(HOME, '.cline', 'rules', 'AGENTS.md'), src: AGENTS_MD },
-  { name: 'Claude Code', dest: join(HOME, '.claude', 'CLAUDE.md'), src: existsSync(CLAUDE_MD) ? CLAUDE_MD : AGENTS_MD },
-];
-
 // Only this exact obsolete, standalone upstream-generated file is migrated.
 // Modified files and files containing personal instructions are never removed.
 const LEGACY_CONTEXT_RULE_HASH = '7e18f3598fc47c27a6113dfd02a96c5035bcce54d2e28a3568cdb0796151b4d2';
@@ -65,11 +52,9 @@ function retireManagedWorkflow(directory) {
 export function syncRules() {
   if (!existsSync(AGENTS_MD)) throw new Error(`Missing canonical instruction source: ${AGENTS_MD}`);
   let synced = 0;
-  for (const { name, dest, src } of targets) {
-    const agent = name.startsWith('AGY') ? 'AGY' : name.startsWith('Claude') ? 'CLAUDE'
-      : name.startsWith('OpenCode') ? 'OPENCODE' : name.toUpperCase();
-    if (process.env[`SKIP_${agent}`]) continue;
-    if (!existsSync(src)) continue;
+  for (const { directory } of selectedAgentPaths()) {
+    const dest = join(directory, 'AGENTS.md');
+    const src = AGENTS_MD;
     mkdirSync(dirname(dest), { recursive: true });
     let stat;
     try { stat = lstatSync(dest); } catch (error) {

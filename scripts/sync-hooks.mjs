@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 /**
- * sync-hooks.mjs — Merge context-mode + herdr hooks into all 4 CLI agents.
+ * sync-hooks.mjs — Merge context-mode + herdr hooks into Codex, Antigravity and OpenCode.
  *
  * RTK hooks are handled separately by `rtk init` native commands (setup.sh Step 5).
  * MCP servers (context7, mysql, etc.) are handled by sync-mcp.mjs (Step 6).
  *
  * This script (Step 7) is responsible for:
- *   1. Cursor:   merge hooks.json (context-mode + herdr) + MCP + rules
- *   2. AGY CLI:  install context-mode through its native managed plugin
- *   3. Codex:    merge native hooks and register the installed context-mode MCP
- *   4. OpenCode: native context-mode MCP and V2 RTK plugin discovery
+ *   - Antigravity: native managed context-mode and RTK plugins
+ *   - Codex: native hooks and the installed context-mode MCP
+ *   - OpenCode: context-mode MCP and V2 RTK plugin discovery
  *
  * Idempotent: safe to run multiple times.
  * Non-destructive: merges entries, preserves RTK hooks and other unmanaged config.
@@ -227,20 +226,6 @@ function normalizeAgyContextHooks(pluginDst) {
 // ─── Hook merge helpers ─────────────────────────────────────────────────────
 
 /**
- * Ensure a hook entry exists in a Cursor-style hooks object.
- * Format: hooks[event] = [{ command, matcher? }]
- * Matches by checking if `identifier` appears in the command string.
- */
-function ensureCursorHook(hooks, event, entry, identifier) {
-  if (!hooks[event]) hooks[event] = []
-  const exists = hooks[event].some(h =>
-    (h.command || '').includes(identifier)
-  )
-  if (!exists) { hooks[event].push(entry); return true }
-  return false
-}
-
-/**
  * Ensure a hook entry exists in a Codex-style hooks object.
  * Format: hooks[Event] = [{ hooks: [{ type, command, timeout? }], matcher? }]
  * Same structure as AGY but with different event names and optional fields.
@@ -264,96 +249,6 @@ function ensureCodexHook(hooks, event, entry, identifier, replaceExisting = fals
   if (JSON.stringify(updated) === JSON.stringify(hooks[event])) return false
   hooks[event] = updated
   return true
-}
-
-// ─── 1. Cursor CLI ──────────────────────────────────────────────────────────
-
-function syncCursor(ctxPkgDir) {
-  let hooksChanged = false
-
-  // ── 1a. hooks.json: context-mode + herdr ──
-  const hooksPath = join(HOME, '.cursor', 'hooks.json')
-  const config = readJSON(hooksPath) || { version: 1, hooks: {} }
-  if (!config.hooks) config.hooks = {}
-  const hooks = config.hooks
-
-  // Herdr sessionStart
-  const herdrScript = join(HOME, '.cursor', 'herdr-agent-state.sh')
-  if (existsSync(herdrScript)) {
-    hooksChanged |= ensureCursorHook(hooks, 'sessionStart', {
-      command: `bash '${herdrScript}' session`
-    }, 'herdr')
-  }
-
-  // RTK hook (preToolUse)
-  if (hasCmd('rtk')) {
-    hooksChanged |= ensureCursorHook(hooks, 'preToolUse', {
-      command: 'rtk hook cursor',
-      matcher: 'Shell'
-    }, 'rtk hook cursor')
-  }
-
-  // Context-mode hooks (preToolUse, postToolUse, stop)
-  if (hasCmd('context-mode')) {
-    hooksChanged |= ensureCursorHook(hooks, 'preToolUse', {
-      command: 'context-mode hook cursor pretooluse',
-      matcher: 'Shell|Read|Grep|WebFetch|mcp_web_fetch|mcp_fetch_tool|Task|MCP:ctx_execute|MCP:ctx_execute_file|MCP:ctx_batch_execute|MCP:(?!ctx_)'
-    }, 'context-mode')
-
-    hooksChanged |= ensureCursorHook(hooks, 'postToolUse', {
-      command: 'context-mode hook cursor posttooluse'
-    }, 'context-mode')
-
-    hooksChanged |= ensureCursorHook(hooks, 'stop', {
-      command: 'context-mode hook cursor stop'
-    }, 'context-mode')
-  }
-
-  if (hooksChanged) writeJSON(hooksPath, config)
-  ok(`Cursor   hooks.json ${hooksChanged ? '(updated)' : '(up to date)'}`)
-
-  // ── 1b. mcp.json: ensure context-mode MCP server ──
-  // Note: sync-mcp.mjs overwrites mcp.json with shared servers,
-  // so this runs AFTER sync-mcp.mjs to add context-mode back.
-  if (hasCmd('context-mode')) {
-    const mcpPath = join(HOME, '.cursor', 'mcp.json')
-    const mcpConfig = readJSON(mcpPath) || { mcpServers: {} }
-    if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {}
-
-    if (!mcpConfig.mcpServers['context-mode']) {
-      mcpConfig.mcpServers['context-mode'] = { command: 'context-mode' }
-      writeJSON(mcpPath, mcpConfig)
-      ok('Cursor   mcp.json (added context-mode MCP)')
-    } else {
-      info('Cursor   mcp.json context-mode MCP already present')
-    }
-  }
-
-  // ── 1c. Cursor Agent CLI: allow read-only Codegraph exploration ──
-  // Cursor's global approval mode can otherwise reject MCP calls even when the
-  // server itself is enabled. Keep this grant to the single read-only tool.
-  const cliConfigPath = join(HOME, '.cursor', 'cli-config.json')
-  const cliConfig = readJSON(cliConfigPath) || {}
-  if (!cliConfig.permissions) cliConfig.permissions = {}
-  if (!Array.isArray(cliConfig.permissions.allow)) cliConfig.permissions.allow = []
-  if (!cliConfig.permissions.allow.includes('Mcp(codegraph:codegraph_explore)')) {
-    cliConfig.permissions.allow.push('Mcp(codegraph:codegraph_explore)')
-    writeJSON(cliConfigPath, cliConfig)
-    ok('Cursor   CLI permission (allowed Codegraph explore)')
-  } else {
-    info('Cursor   CLI permission for Codegraph explore already present')
-  }
-
-  // ── 1d. Rules: context-mode.mdc routing rules ──
-  if (ctxPkgDir) {
-    const src = join(ctxPkgDir, 'configs', 'cursor', 'context-mode.mdc')
-    const dst = join(HOME, '.cursor', 'rules', 'context-mode.mdc')
-    if (safeSymlink(src, dst)) {
-      ok('Cursor   context-mode.mdc rule → symlinked')
-    } else {
-      info('Cursor   context-mode.mdc rule already exists')
-    }
-  }
 }
 
 // ─── 2. AGY CLI (Antigravity) ───────────────────────────────────────────────
@@ -738,87 +633,6 @@ function syncOpenCode() {
   ok('OpenCode RTK plugin installed through native discovery')
 }
 
-// ─── 5. Kilo CLI ────────────────────────────────────────────────────────────
-
-function syncKilo() {
-  // Similar to OpenCode, Kilo manages context-mode through other means (like skills or native plugins).
-  // We just ensure we don't break its kilo.json
-  ok(`Kilo     hooks up to date (managed natively)`)
-}
-
-// ─── 6. Claude Code CLI ─────────────────────────────────────────────────────
-
-function syncClaude() {
-  const claudeDir = join(HOME, '.claude')
-  const settingsPath = join(claudeDir, 'settings.json')
-  let settings = readJSON(settingsPath) || {}
-  let changed = false
-
-  if (!settings.hooks) settings.hooks = {}
-
-  // 1. Ensure RTK hook in PreToolUse for Bash
-  if (hasCmd('rtk')) {
-    if (!Array.isArray(settings.hooks.PreToolUse)) settings.hooks.PreToolUse = []
-    const hasRtk = settings.hooks.PreToolUse.some(entry =>
-      entry.hooks?.some(h => typeof h.command === 'string' && h.command.includes('rtk hook claude'))
-    )
-    if (!hasRtk) {
-      settings.hooks.PreToolUse.push({
-        matcher: 'Bash',
-        hooks: [
-          {
-            type: 'command',
-            command: 'rtk hook claude',
-          },
-        ],
-      })
-      changed = true
-    }
-  }
-
-  // 2. Ensure herdr hook in SessionStart if herdr script exists
-  const claudeHerdrScript = join(HOME, '.claude', 'hooks', 'herdr-agent-state.sh')
-  const localHerdrScript  = join(HOME, '.local', 'bin', 'herdr-agent-state.sh')
-  const herdrScript = existsSync(claudeHerdrScript) ? claudeHerdrScript : localHerdrScript
-
-  if (existsSync(herdrScript)) {
-    if (!Array.isArray(settings.hooks.SessionStart)) settings.hooks.SessionStart = []
-    const hasHerdr = settings.hooks.SessionStart.some(entry =>
-      entry.hooks?.some(h => typeof h.command === 'string' && h.command.includes('herdr-agent-state.sh'))
-    )
-    if (!hasHerdr) {
-      settings.hooks.SessionStart.push({
-        matcher: '*',
-        hooks: [
-          {
-            type: 'command',
-            command: `bash '${herdrScript}' session`,
-            timeout: 10,
-          },
-        ],
-      })
-      changed = true
-    }
-  }
-
-  if (changed || !existsSync(settingsPath)) {
-    try {
-      if (!existsSync(claudeDir)) mkdirSync(claudeDir, { recursive: true })
-      writeJSON(settingsPath, settings)
-    } catch (e) {
-      warn(`Claude Code settings.json write failed: ${e.message}`)
-    }
-  }
-  ok(`Claude Code settings.json ${changed ? '(updated hooks)' : '(up to date)'}`)
-}
-
-// ─── 7. Cline ───────────────────────────────────────────────────────────────
-
-function syncCline() {
-  // Cline relies on prompt instructions in AGENTS.md rather than a lifecycle hook API
-  ok(`Cline    hooks up to date (managed via AGENTS.md rules)`)
-}
-
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 console.log('\n🔗 Syncing hooks (context-mode + herdr)...\n')
@@ -837,13 +651,9 @@ if (!HAS_CTX) {
   info('Rules/skills symlinks will be skipped; hooks will still be configured')
 }
 
-if (!process.env.SKIP_CURSOR) { try { syncCursor(ctxPkgDir) }  catch (e) { err(`Cursor: ${e.message}`) } } else { info('Cursor   hooks → skipped') }
 if (!process.env.SKIP_AGY) { try { syncAgy(ctxPkgDir) }     catch (e) { err(`AGY: ${e.message}`) } } else { info('AGY      hooks → skipped') }
 if (!process.env.SKIP_CODEX) { try { syncCodex(ctxPkgDir) }            catch (e) { err(`Codex: ${e.message}`) } } else { info('Codex    hooks → skipped') }
 if (!process.env.SKIP_OPENCODE) { try { syncOpenCode() }         catch (e) { err(`OpenCode: ${e.message}`) } } else { info('OpenCode hooks → skipped') }
-if (!process.env.SKIP_KILO) { try { syncKilo() }             catch (e) { err(`Kilo: ${e.message}`) } } else { info('Kilo     hooks → skipped') }
-if (!process.env.SKIP_CLAUDE) { try { syncClaude() }           catch (e) { err(`Claude Code: ${e.message}`) } } else { info('Claude Code hooks → skipped') }
-if (!process.env.SKIP_CLINE) { try { syncCline() }            catch (e) { err(`Cline: ${e.message}`) } } else { info('Cline    hooks → skipped') }
 
 if (!process.exitCode && !process.env.SKIP_OPENCODE && process.argv.includes('--reload-opencode')) {
   try {

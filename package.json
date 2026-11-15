@@ -1,7 +1,7 @@
 {
   "name": "sync-cli-tool",
   "version": "1.0.0",
-  "description": "Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to AGY, Codex, OpenCode, Cursor, Kilo, Cline, and Claude Code",
+  "description": "Single Source of Truth for MCP servers, skills, rules, and hooks — automatically synced to Codex, Antigravity, and OpenCode",
   "type": "module",
   "engines": {
     "node": ">=24.15.0"

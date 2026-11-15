@@ -1,21 +1,12 @@
 #!/usr/bin/env node
 /**
- * sync-skills.mjs — Synchronize skills from ~/.agents/skills (or ./skills)
- * to all tool-specific locations:
- *   - AGY Global:  ~/.gemini/config/skills/
- *   - AGY CLI:     ~/.gemini/antigravity-cli/skills/
- *   - AGY IDE:     ~/.gemini/antigravity-ide/skills/
- *   - AGY 2.0:     ~/.gemini/antigravity/skills/
- *   - Codex:       ~/.codex/skills/
- *   - Codex profile: $CODEX_HOME/skills/ (when configured separately)
- *   - Cursor:      ~/.config/Cursor/User/skills
- *   - Claude Code: ~/.claude/skills/
- *   - Cline:       ~/.cline/skills/
+ * Link canonical skills into Codex, Antigravity and OpenCode host locations.
+ * Preserve personal entries, unrelated links and active Codex system skills.
  */
-
 import { readdirSync, existsSync, mkdirSync, symlinkSync, readlinkSync, lstatSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { selectedAgentPaths } from './agent-paths.mjs';
 
 const HOME = homedir();
 const AGENTS_DIR = join(HOME, '.agents');
@@ -50,27 +41,9 @@ export function syncSkills() {
     .map(dirent => dirent.name);
 
   // Target directories that accept individual skill symlinks
-  const targetDirs = [
-    { name: 'AGY Global (IDE / CLI / 2.0)', path: join(HOME, '.gemini', 'config', 'skills') },
-    { name: 'AGY CLI', path: join(HOME, '.gemini', 'antigravity-cli', 'skills') },
-    { name: 'AGY IDE', path: join(HOME, '.gemini', 'antigravity-ide', 'skills') },
-    { name: 'AGY 2.0', path: join(HOME, '.gemini', 'antigravity', 'skills') },
-    { name: 'Codex', path: join(HOME, '.codex', 'skills') },
-    ...(process.env.CODEX_HOME && resolve(process.env.CODEX_HOME) !== join(HOME, '.codex')
-      ? [{ name: 'Codex active profile', path: join(resolve(process.env.CODEX_HOME), 'skills') }]
-      : []),
-    { name: 'Claude Code', path: join(HOME, '.claude', 'skills') },
-    { name: 'Cline', path: join(HOME, '.cline', 'skills') },
-    { name: 'OpenCode', path: join(HOME, '.config', 'opencode', 'skills') },
-    { name: 'Cursor CLI', path: join(HOME, '.cursor', 'skills') },
-  ];
+  const targetDirs = selectedAgentPaths().map(({ directory, name }) => ({ name, path: join(directory, 'skills') }));
 
   for (const target of targetDirs) {
-    const agent = target.name.startsWith('AGY') ? 'AGY'
-      : target.name.startsWith('Codex') ? 'CODEX'
-      : target.name.startsWith('Claude') ? 'CLAUDE'
-      : target.name.startsWith('Cursor') ? 'CURSOR' : target.name.toUpperCase();
-    if (process.env[`SKIP_${agent}`]) continue;
     try {
       if (!existsSync(target.path)) {
         mkdirSync(target.path, { recursive: true });
@@ -106,20 +79,7 @@ export function syncSkills() {
     // Preserve unrelated and temporarily unavailable links.
   }
 
-  // Cursor handling: ensure symlink exists
-  const cursorUserDir = join(HOME, '.config', 'Cursor', 'User');
-  const cursorSkillsLink = join(cursorUserDir, 'skills');
-  if (!process.env.SKIP_CURSOR && existsSync(cursorUserDir)) {
-    const stat = lstatSafe(cursorSkillsLink);
-    if (!stat) {
-      try {
-        symlinkSync(REPO_SKILLS_DIR, cursorSkillsLink, 'dir');
-        ok(`Cursor skills linked → ${REPO_SKILLS_DIR}`);
-      } catch {}
-    }
-  }
-
-  ok(`Skills synchronized: ${skillDirs.length} skills across all agent environments.`);
+  ok(`Skills synchronized: ${skillDirs.length} skills across ${targetDirs.length} selected host locations.`);
   return { synced: skillDirs.length, skills: skillDirs };
 }
 

@@ -27,18 +27,6 @@ test('package.json sync script includes sync-skills.mjs', () => {
   assert.match(pkg.scripts.sync, /sync-skills\.mjs/);
 });
 
-test('sync-skills targets Claude Code and Cline directories', () => {
-  const scriptContent = readFileSync(new URL('../scripts/sync-skills.mjs', import.meta.url), 'utf8');
-  assert.match(scriptContent, /\.claude.*skills/);
-  assert.match(scriptContent, /\.cline.*skills/);
-});
-
-test('sync-skills targets OpenCode and Cursor directories', () => {
-  const scriptContent = readFileSync(new URL('../scripts/sync-skills.mjs', import.meta.url), 'utf8');
-  assert.match(scriptContent, /\.config.*opencode.*skills/);
-  assert.match(scriptContent, /\.cursor.*skills/);
-});
-
 test('sync-skills also populates an active CODEX_HOME without replacing system skills', (t) => {
   const fixture = mkdtempSync(join(tmpdir(), 'active-codex-skills-'));
   t.after(() => rmSync(fixture, { recursive: true, force: true }));

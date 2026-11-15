@@ -38,14 +38,6 @@ jobs:
         run: |
           for f in scripts/*.mjs; do node --check "$f"; done
 
-      - name: Verify generated Cursor rule is in sync
-        # setup.sh regenerates plugins/cursor/rules/agent-workflow.mdc
-        # from rules/AGENTS.md on every run — fail if the committed
-        # copy drifted instead of silently shipping a stale rule.
-        run: |
-          { echo "---"; echo "alwaysApply: true"; echo "---"; echo ""; cat rules/AGENTS.md; } > /tmp/expected-agent-workflow.mdc
-          diff /tmp/expected-agent-workflow.mdc plugins/cursor/rules/agent-workflow.mdc
-
   shell-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10

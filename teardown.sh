@@ -85,15 +85,11 @@ restore_bak() {
   ok "Restored backup (original backup retained): $target"
 }
 echo "sync-CLI-Tool teardown: preserve personal files and backups"
-for target in \
-  "$HOME_DIR/.cursor/plugins/local/sync-cli-tool" \
-  "$HOME_DIR/.config/Cursor/User/skills" \
-  "$HOME_DIR/.config/opencode/plugins/rtk.ts"; do
-  remove_symlink "$target"
-done
-for base in   "$HOME_DIR/.gemini/config" "$HOME_DIR/.gemini/antigravity-cli"   "$HOME_DIR/.gemini/antigravity-ide" "$HOME_DIR/.gemini/antigravity"   "$HOME_DIR/.codex" "${CODEX_HOME:-$HOME_DIR/.codex}"   "$HOME_DIR/.config/opencode" "$HOME_DIR/.config/kilo"   "$HOME_DIR/.claude" "$HOME_DIR/.cline" "$HOME_DIR/.cursor"; do
+remove_symlink "$HOME_DIR/.config/opencode/plugins/rtk.ts"
+for base in "$HOME_DIR/.gemini/config" "$HOME_DIR/.gemini/antigravity-cli" \
+  "$HOME_DIR/.gemini/antigravity-ide" "$HOME_DIR/.gemini/antigravity" \
+  "$HOME_DIR/.codex" "${CODEX_HOME:-$HOME_DIR/.codex}" "$HOME_DIR/.config/opencode"; do
   remove_symlink "$base/AGENTS.md"
-  remove_symlink "$base/CLAUDE.md"
   remove_symlink "$base/WORKFLOW.md"
   remove_symlink "$base/rules/AGENTS.md"
   remove_symlink "$base/rules/WORKFLOW.md"
@@ -103,7 +99,14 @@ for base in   "$HOME_DIR/.gemini/config" "$HOME_DIR/.gemini/antigravity-cli"   "
     remove_symlink "$base/skills/$(basename "$skill_dir")"
   done
 done
-for target in   "$HOME_DIR/.cursor/mcp.json" "$HOME_DIR/.cursor/hooks.json"   "$HOME_DIR/.gemini/config/mcp_config.json" "$HOME_DIR/.gemini/antigravity-cli/mcp_config.json"   "$HOME_DIR/.gemini/antigravity-ide/mcp_config.json" "$HOME_DIR/.gemini/antigravity/mcp_config.json"   "$HOME_DIR/.gemini/config/hooks.json" "$HOME_DIR/.codex/hooks.json"   "${CODEX_HOME:-$HOME_DIR/.codex}/hooks.json" "${CODEX_HOME:-$HOME_DIR/.codex}/config.toml"   "$HOME_DIR/.config/opencode/opencode.json" "$HOME_DIR/.config/opencode/opencode.jsonc"   "$HOME_DIR/.config/kilo/kilo.json" "$HOME_DIR/.config/kilo/kilo.jsonc"   "$HOME_DIR/.claude.json" "$HOME_DIR/.claude/settings.json"   "$HOME_DIR/.cline/data/settings/cline_mcp_settings.json"   "$HOME_DIR/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"; do
+for target in "$HOME_DIR/.gemini/config/mcp_config.json" \
+  "$HOME_DIR/.gemini/antigravity-cli/mcp_config.json" \
+  "$HOME_DIR/.gemini/antigravity-ide/mcp_config.json" \
+  "$HOME_DIR/.gemini/antigravity/mcp_config.json" \
+  "$HOME_DIR/.config/Antigravity IDE/User/mcp.json" \
+  "$HOME_DIR/.gemini/config/hooks.json" "$HOME_DIR/.codex/hooks.json" \
+  "${CODEX_HOME:-$HOME_DIR/.codex}/hooks.json" "${CODEX_HOME:-$HOME_DIR/.codex}/config.toml" \
+  "$HOME_DIR/.config/opencode/opencode.json" "$HOME_DIR/.config/opencode/opencode.jsonc"; do
   restore_bak "$target"
 done
 remove_symlink "$HOME_DIR/.agents"

@@ -13,8 +13,8 @@ test('sync-mcp handles remote HTTP/SSE servers with url and headers for AGY', ()
   assert.match(source, /headers:\s*Object\.fromEntries/)
 })
 
-test('sync-mcp handles remote HTTP/SSE servers for Cursor and OpenCode', () => {
-  assert.match(source, /buildCursor/)
+test('sync-mcp handles remote HTTP/SSE servers for Antigravity IDE and OpenCode', () => {
+  assert.match(source, /buildAgyIdeUser/)
   assert.match(source, /buildOpenCode/)
   assert.match(source, /type:\s*['"]remote['"]/)
 })
@@ -23,16 +23,6 @@ test('sync-mcp syncs remote HTTP/SSE servers to Codex using --url flag and http_
   assert.match(source, /syncCodex/)
   assert.match(source, /['"]--url['"]/)
   assert.match(source, /http_headers/)
-})
-
-test('sync-mcp builds Cline MCP configuration for CLI and VS Code extension', () => {
-  assert.match(source, /buildCline/)
-  assert.match(source, /cline_mcp_settings\.json/)
-})
-
-test('sync-mcp builds Claude Code MCP configuration and merges with ~/.claude.json', () => {
-  assert.match(source, /buildClaudeCode/)
-  assert.match(source, /\.claude\.json/)
 })
 
 test('sync-mcp formats OpenCode MCP servers under mcp.servers for v2', () => {

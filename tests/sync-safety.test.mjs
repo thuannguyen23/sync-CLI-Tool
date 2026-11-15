@@ -7,7 +7,7 @@ import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 
 const repo = new URL('..', import.meta.url).pathname;
-const agents = ['AGY', 'CODEX', 'OPENCODE', 'CURSOR', 'KILO', 'CLAUDE', 'CLINE'];
+const agents = ['AGY', 'CODEX', 'OPENCODE'];
 function fixture(t, selected = []) {
   const home = mkdtempSync(join(tmpdir(), 'sync-safety-'));
   t.after(() => rmSync(home, { recursive: true, force: true }));
@@ -492,7 +492,7 @@ test('rules sync checks the canonical policy before changing a client', t => {
   f.write(join(f.home, 'checkout/package.json'), { type: 'module' });
   f.write(join(f.home, 'checkout/rules/WORKFLOW.md'), 'obsolete fixture workflow');
   mkdirSync(scripts, { recursive: true });
-  for (const name of ['sync-rules.mjs', 'config-utils.mjs']) copyFileSync(join(repo, 'scripts', name), join(scripts, name));
+  for (const name of ['sync-rules.mjs', 'config-utils.mjs', 'agent-paths.mjs']) copyFileSync(join(repo, 'scripts', name), join(scripts, name));
   const r = spawnSync(process.execPath, [join(scripts, 'sync-rules.mjs')], { env: f.env, encoding: 'utf8' });
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /Missing canonical instruction source/);
@@ -501,8 +501,8 @@ test('rules sync checks the canonical policy before changing a client', t => {
 
 
 test('setup rules step uses one policy and preserves personal rules for other supported hosts', t => {
-  const f = fixture(t, ['KILO', 'CLAUDE', 'CLINE']);
-  const cases = [['.config/kilo', 'AGENTS.md'], ['.claude', 'CLAUDE.md'], ['.cline/rules', 'AGENTS.md']];
+  const f = fixture(t, ['AGY', 'OPENCODE']);
+  const cases = [['.gemini/config', 'AGENTS.md'], ['.gemini/antigravity-cli', 'AGENTS.md'], ['.config/opencode', 'AGENTS.md']];
   for (const [dir, file] of cases) f.write(join(f.home, dir, file), 'personal rules');
   const source = readFileSync(join(repo, 'setup.sh'), 'utf8');
   const begin = source.indexOf('# ─── Step 4:');
@@ -527,7 +527,7 @@ test('rules sync runs without a workflow source and removes its dangling managed
   f.write(join(checkout, 'package.json'), { type: 'module' });
   f.write(join(checkout, 'rules/AGENTS.md'), 'standalone canonical policy');
   mkdirSync(join(checkout, 'scripts'), { recursive: true });
-  for (const name of ['sync-rules.mjs', 'config-utils.mjs']) copyFileSync(join(repo, 'scripts', name), join(checkout, 'scripts', name));
+  for (const name of ['sync-rules.mjs', 'config-utils.mjs', 'agent-paths.mjs']) copyFileSync(join(repo, 'scripts', name), join(checkout, 'scripts', name));
   mkdirSync(f.profile, { recursive: true });
   const link = join(f.profile, 'WORKFLOW.md');
   symlinkSync(join(checkout, 'rules/WORKFLOW.md'), link);
@@ -600,19 +600,6 @@ fs.writeFileSync(file,'host-specific tool spelling');
     assert.equal(readFileSync(join(target, 'references/nested.md'), 'utf8'), 'nested reference');
     assert.equal(lstatSync(target).isSymbolicLink(), false);
   }
-});
-
-test('Cursor and Cline preserve personal MCP servers and settings', t => {
-  const f=fixture(t,['CURSOR','CLINE']);
-  const files=[join(f.home,'.cursor/mcp.json'),join(f.home,'.cline/data/settings/cline_mcp_settings.json')];
-  for (const file of files) f.write(file,{custom:'keep',mcpServers:{personal:{command:'mine'}}});
-  const r=f.run('sync-mcp.mjs');assert.equal(r.status,0,r.stderr);
-  for (const file of files) { const d=JSON.parse(readFileSync(file));assert.equal(d.custom,'keep');assert.equal(d.mcpServers.personal.command,'mine');assert.ok(d.mcpServers.audit); }
-});
-
-test('Claude malformed config remains untouched even with old backup', t => {
-  const f=fixture(t,['CLAUDE']);const file=join(f.home,'.claude.json');const original='{"personal":"new", BAD';f.write(file,original);f.write(file+'.bak','{"old":true}');
-  const r=f.run('sync-mcp.mjs');assert.notEqual(r.status,0);assert.equal(readFileSync(file,'utf8'),original);assert.equal(readFileSync(file+'.bak','utf8'),'{"old":true}');
 });
 
 test('skill sync preserves personal and unrelated broken symlinks', t => {

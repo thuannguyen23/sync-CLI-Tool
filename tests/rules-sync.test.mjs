@@ -9,51 +9,24 @@ test("setup delegates the selected agent rules to the shared sync script", () =>
   assert.match(read("setup.sh"), /node "\$AGENTS_DIR\/scripts\/sync-rules\.mjs"/);
 });
 
-test("Cursor adapter is an always-applied rule in a local plugin", () => {
-  const manifest = JSON.parse(
-    read("plugins/cursor/.cursor-plugin/plugin.json"),
-  );
-  const rule = read("plugins/cursor/rules/agent-workflow.mdc");
-  const canonicalPolicy = read("rules/AGENTS.md");
-
-  assert.equal(manifest.name, "sync-cli-tool");
-  assert.match(rule, /^---\n[\s\S]*alwaysApply:\s*true[\s\S]*\n---/);
-  assert.match(rule, /Codegraph Impact Gate/);
-  assert.match(rule, /When a Valid Plan Exists/);
-  assert.match(rule, /Verification Gate/);
-  assert.equal(rule.replace(/^---\n[\s\S]*?\n---\n+/, ""), canonicalPolicy);
-});
-
-test("canonical policy contains the workflow safety gates", () => {
+test("shared policy scopes tool and skill use without adding authority", () => {
   const policy = read("rules/AGENTS.md");
-
-  assert.match(policy, /SureForge Quality Discipline/);
-  assert.match(policy, /Workflow State Gate/);
-  assert.match(policy, /When a Valid Plan Exists/);
-  assert.match(policy, /Codegraph Impact Gate/);
-  assert.match(policy, /The required first-choice tool is `Codegraph`/);
-  assert.match(policy, /Verification Gate/);
-  assert.match(policy, /Do not repeat a completed lifecycle phase/);
-  assert.match(policy, /Code Preview and Authorization/);
-  assert.match(policy, /existing explicit authorization/);
-  assert.match(policy, /Absolute Git Prohibition/);
-  assert.doesNotMatch(policy, /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
+  assert.match(policy, /focused-2026-11-15/);
+  assert.match(policy, /Skills provide methods, not additional authority/);
+  assert.match(policy, /Do not repeat completed\s+phases/);
+  assert.match(policy, /Empty graph results do not prove/);
+  assert.match(policy, /Do not create or rebuild an index without authorization/);
+  assert.match(policy, /at most three repair rounds/);
+  assert.doesNotMatch(policy, /required first-choice tool|Workflow: <state>/);
 });
-
 test("Antigravity recovery guide is translated to English", () => {
   const guide = read("docs/antigravity-session-recovery-guide.md");
   assert.match(guide, /Antigravity IDE Chat History Recovery/i);
   assert.doesNotMatch(guide, /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i);
 });
 
-test("sync-rules.mjs distributes AGENTS.md and CLAUDE.md to all agent environments", () => {
-  const script = read("scripts/sync-rules.mjs");
-  assert.match(script, /AGENTS\.md/);
-  assert.match(script, /CLAUDE\.md/);
-  assert.match(script, /\.gemini.*AGENTS\.md/);
-  // Codex paths and CODEX_HOME are covered by the isolated behavior regressions.
-  assert.match(script, /\.config.*opencode.*AGENTS\.md/);
-  assert.match(script, /\.claude.*CLAUDE\.md/);
-  assert.match(script, /\.cline.*rules.*AGENTS\.md/);
+test("host destinations have one shared registry", () => {
+  assert.match(read("scripts/sync-rules.mjs"), /selectedAgentPaths/);
+  assert.match(read("scripts/sync-skills.mjs"), /selectedAgentPaths/);
+  assert.match(read("scripts/doctor.mjs"), /agentPaths/);
 });
-
