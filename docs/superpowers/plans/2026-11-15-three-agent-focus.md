@@ -142,3 +142,35 @@ Self-review findings resolved:
 Remaining limits: no native model-session/A-B claims, no live hook execution,
 no fresh MCP handshake, no clean-OS bootstrap or package installation exercise,
 and no local ShellCheck/remote CI run. Existing optional credential gaps remain.
+
+
+## Authorized live application — 2026-11-15
+
+User follow-up authorized running the sync on the real machine. This extends
+repository-only scope to supported-host configuration writes; the earlier statement
+that no live sync ran describes the refactor delivery, not this application.
+
+- Fresh preflight: `node --test tests/supported-hosts.test.mjs tests/sync-safety.test.mjs`
+  -> exit 0, 43/43 passed, zero skipped.
+- Private current-state snapshot/logs:
+  `/home/thuannguyen23/.local/state/sync-cli-tool/evidence/2026-11-15-live-sync-a21dl9di/`.
+  Snapshot includes 51 supported paths; manifest/logs are private.
+- Native profile `CODEX_HOME=/home/thuannguyen23/.codex npm run sync`: exit 0;
+  Codex, Antigravity and OpenCode selected. 25 canonical skills, six policy paths.
+- Existing Orca Codex profile: `SKIP_AGY=1 SKIP_OPENCODE=1` with its explicit
+  CODEX_HOME and `npm run sync`: exit 0. Both Codex policy/skill locations handled;
+  active profile MCP/hooks registered. No other account profiles were selected.
+- Post-sync: all 7 live policy links match focused-2026-11-15; all 26 captured
+  canonical SKILL.md hashes unchanged. All 17 retired-client path snapshots
+  unchanged (including owned links), with no retired-client cleanup.
+- Post-sync registration/preservation checks: 15/15. Both Codex context-mode MCPs
+  and native RTK hooks present; unmanaged Codex MCP entries preserved; OpenCode
+  model/provider/agent settings preserved; supported AGY MCPs/plugins present.
+- Fresh doctor on default Codex profile: exit 0, 151 OK / 19 UNVERIFIED /
+  2 UNCONFIGURED. On Orca profile: exit 0, 174 OK / 22 UNVERIFIED /
+  2 UNCONFIGURED. Missing inputs belong to mysql-remote-jcf and
+  mysql-local-forbes; no credentials were invented or printed.
+- READY for applied configuration. These checks establish current configuration
+  and preservation only. No model-session, MCP handshake, live database tool call,
+  general compliance/performance claim, package install, Git mutation or teardown.
+  Restart/new sessions are needed to load configuration into existing agents.
