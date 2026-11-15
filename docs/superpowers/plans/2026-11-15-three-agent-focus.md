@@ -174,3 +174,54 @@ that no live sync ran describes the refactor delivery, not this application.
   and preservation only. No model-session, MCP handshake, live database tool call,
   general compliance/performance claim, package install, Git mutation or teardown.
   Restart/new sessions are needed to load configuration into existing agents.
+
+
+## Codex context-mode marketplace timeout repair — 2026-11-15
+
+User reported startup update failure: git clone marketplace source timed out after
+30 seconds, fatal early EOF, on the Orca Codex profile. Authorized investigation,
+scoped repository repair and live configuration correction.
+
+Findings:
+- Both native and Orca profiles had marketplaces.context-mode pointing to
+  https://github.com/mksglu/context-mode.git (revision metadata dated September 3).
+  The pre-sync snapshots prove the registration predated the latest live sync.
+- Neither profile had configured plugin settings or content in the context-mode
+  plugin cache. context-mode 2.1.10 was independently registered through native
+  MCP/hooks. The Git marketplace was therefore redundant in these profiles.
+- Read-only git ls-remote succeeded in 0.83 seconds during investigation. This
+  confirms current remote reachability, not the cause of the earlier clone EOF.
+- Official CLI documentation inspected:
+  https://developers.openai.com/plugins/build/plugins
+  Local CLI confirms marketplace list/remove support and JSON output.
+
+Repair and evidence:
+- Saved private config backups under
+  /home/thuannguyen23/.local/state/sync-cli-tool/evidence/2026-11-15-marketplace-fix-pvwea_pg/.
+- Ran codex plugin marketplace remove context-mode --json for each explicit
+  CODEX_HOME. Both exit 0. Parsed TOML comparison confirms every other setting
+  and any other marketplace remained unchanged.
+- scripts/sync-hooks.mjs now retires only the known official orphan marketplace
+  after successful native v2 setup. It preserves custom sources and any cached
+  plugin or @context-mode configuration reference; backups use existing helpers.
+- Regression for orphan retirement observed RED (marketplace remained), then
+  GREEN after the implementation. Repeated syncs preserve direct/personal MCPs
+  and model settings; cached plugin and custom-source preservation tests pass.
+  An initial test insertion landed inside an existing fake-CLI template string;
+  moved the block before obtaining the meaningful RED. No production repair round
+  was spent on that fixture syntax mistake.
+- Full suite: npm test -> exit 0, 135/135, zero failed/skipped. Changed JS syntax
+  and git diff --check pass. README documents native setup and selective cleanup.
+- Ran repaired sync-hooks.mjs on both real Codex profiles, exit 0 each. Fresh
+  marketplace list: native retains openai-curated only; Orca has no configured
+  marketplace. context-mode is absent after upstream setup and our sync.
+- Actual configured context-mode MCP on both profiles: initialize succeeded,
+  tools/list returned 9 tools, and tools/call ctx_execute printed the exact
+  CONTEXT_MODE_MARKETPLACE_FIX_OK marker. MCP processes stopped after the probe.
+
+Gate: READY for this repair; self-review-only. One production repair cycle.
+No dependency install, Git mutation, marketplace re-clone, global Git/network
+setting change, or other-host sync. The earlier network/EOF cause remains
+unproven; the unnecessary clone trigger is removed. Existing Codex sessions need
+restart/reload to stop using an already loaded marketplace configuration. No
+model-session or actual hook execution claim is made.

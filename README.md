@@ -71,6 +71,13 @@ The managed rule paths are symlinks, so edits to `rules/AGENTS.md` are immediate
 visible through existing links; restart sessions when updated instructions must
 be loaded. Do not infer instruction loading or compliance from file equality.
 
+Codex context-mode uses the installed package's native MCP/hooks; it does not
+require a Git marketplace. After successful native setup, sync retires an orphan
+`context-mode` marketplace pointing to the official upstream repository when no
+cached plugin or `@context-mode` config reference uses it. Custom sources and
+cached/configured plugins are preserved. This avoids unnecessary startup clones
+for old registrations without disabling the directly installed MCP.
+
 To add an MCP, edit `mcp/servers.json`, add credential placeholders to
 `secrets.env.example` when needed, and run the selected-host MCP sync. Missing
 optional credentials skip registration; an existing matching registration without

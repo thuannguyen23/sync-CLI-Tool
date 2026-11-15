@@ -51,9 +51,70 @@ if (args[1] === 'add') {
   text += '\\n[mcp_servers.' + args[2] + ']\\nurl = "https://example.invalid/mcp"\\n';
 }
 
+
 fs.writeFileSync(file, text);
 `, { mode: 0o755 });
 }
+
+function codexMarketplaceFixture(t, { source = 'https://github.com/mksglu/context-mode.git', cachedPlugin = false } = {}) {
+  const f = fixture(t, ['CODEX']);
+  const pkg = join(f.home, 'npm/context-mode');
+  const config = join(f.profile, 'config.toml');
+  f.write(join(pkg, 'package.json'), { version: '2.1.10' });
+  f.write(join(pkg, 'hooks/codex.json'), { hooks: {} });
+  f.write(join(f.bin, 'npm'), '#!/bin/sh\necho "' + join(f.home, 'npm') + '"\n');
+  f.write(join(f.bin, 'context-mode'), '#!/bin/sh\nexit 0\n');
+  f.write(join(f.bin, 'rtk'), '#!/bin/sh\necho "rtk 1.2.0"\n');
+  const original = '# personal settings\nmodel = "personal-model"\n\n' +
+    '[mcp_servers.context-mode]\ncommand = "/fixture/context-mode"\n\n' +
+    '[mcp_servers.personal]\ncommand = "/fixture/personal"\n\n' +
+    '[marketplaces.context-mode]\nsource_type = "git"\nsource = ' + JSON.stringify(source) + '\n';
+  f.write(config, original);
+  if (cachedPlugin) f.write(join(f.profile, 'plugins/cache/context-mode/context-mode/1.0/plugin.json'), '{"name":"context-mode"}');
+  f.write(join(f.bin, 'codex'), `#!${process.execPath}
+const fs=require('node:fs'),path=require('node:path');
+const file=path.join(process.env.CODEX_HOME,'config.toml'),args=process.argv.slice(2);
+if(args[0]==='plugin' && args[1]==='marketplace') {
+  if(args[2]==='list') console.log(JSON.stringify({marketplaces:[{name:'context-mode',marketplaceSource:{sourceType:'git',source:${JSON.stringify(source)}}}]}));
+  else if(args[2]==='remove') fs.writeFileSync(file,fs.readFileSync(file,'utf8').replace(/\\n\\[marketplaces\\.context-mode\\][^]*?(?=\\n\\[|$)/,''));
+  else process.exit(2);
+}
+`);
+  for (const name of ['npm', 'codex', 'context-mode', 'rtk']) {
+    assert.equal(spawnSync('chmod', ['+x', join(f.bin, name)]).status, 0);
+  }
+  return { ...f, config, original };
+}
+
+test('Codex native sync retires an orphan official context-mode marketplace and preserves direct MCP/settings', t => {
+  const f = codexMarketplaceFixture(t);
+  for (let i = 0; i < 2; i++) {
+    const result = f.run('sync-hooks.mjs');
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const text = readFileSync(f.config, 'utf8');
+    assert.doesNotMatch(text, /\[marketplaces\.context-mode\]/);
+    assert.match(text, /model = "personal-model"/);
+    assert.match(text, /\[mcp_servers\.context-mode\]/);
+    assert.match(text, /\[mcp_servers\.personal\]/);
+  }
+  assert.equal(readFileSync(f.config + '.bak', 'utf8'), f.original);
+});
+
+test('Codex native sync preserves a context-mode marketplace used by a cached plugin', t => {
+  const f = codexMarketplaceFixture(t, { cachedPlugin: true });
+  const result = f.run('sync-hooks.mjs');
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(readFileSync(f.config, 'utf8'), /\[marketplaces\.context-mode\]/);
+  assert.ok(existsSync(join(f.profile, 'plugins/cache/context-mode/context-mode/1.0/plugin.json')));
+});
+
+test('Codex native sync preserves a custom marketplace named context-mode', t => {
+  const f = codexMarketplaceFixture(t, { source: 'https://example.invalid/personal.git' });
+  const result = f.run('sync-hooks.mjs');
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(readFileSync(f.config, 'utf8'), /source = "https:\/\/example.invalid\/personal.git"/);
+});
+
 
 test('OpenCode model selection is explicit and survives later syncs without duplicate plugin keys', t => {
   const f = fixture(t, ['OPENCODE']);

@@ -19,7 +19,7 @@
  */
 
 import {
-  readFileSync, writeFileSync, mkdirSync, existsSync,
+  readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync,
   symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync, renameSync, mkdtempSync, rmSync, copyFileSync, constants
 } from 'fs'
 import { join, dirname } from 'path'
@@ -462,6 +462,27 @@ function detachContextCommandSkills(skillsDir) {
   }
 }
 
+function retireOrphanCodexMarketplace(codexDir) {
+  const file = join(codexDir, 'config.toml')
+  if (!existsSync(file)) return
+  const text = readFileSync(file, 'utf8')
+  // Native MCP/hooks do not need a Git marketplace. Retire only the known
+  // orphan registration; keep custom sources and any configured/cached plugin.
+  if (!/^\s*\[\s*marketplaces(?:\s*\.|\s*\])/m.test(text) || text.includes('@context-mode')) return
+  const cache = join(codexDir, 'plugins', 'cache', 'context-mode')
+  if (existsSync(cache) && readdirSync(cache).length) return
+  const options = { env: { ...process.env, CODEX_HOME: codexDir }, encoding: 'utf8', timeout: 15_000 }
+  const listed = JSON.parse(execFileSync('codex', ['plugin', 'marketplace', 'list', '--json'], options))
+  const entry = listed.marketplaces?.find(item => item.name === 'context-mode')
+  const source = entry?.marketplaceSource
+  if (source?.sourceType !== 'git' || ![
+    'https://github.com/mksglu/context-mode.git', 'https://github.com/mksglu/context-mode',
+  ].includes(source.source)) return
+  backupIfNeeded(file)
+  execFileSync('codex', ['plugin', 'marketplace', 'remove', 'context-mode', '--json'], options)
+  ok('Codex    retired orphan context-mode Git marketplace; native MCP/hooks retained')
+}
+
 function syncCodex(ctxPkgDir) {
   const codexDir = codexHome()
   const hooksPath = join(codexDir, 'hooks.json')
@@ -547,6 +568,7 @@ function syncCodex(ctxPkgDir) {
     execFileSync('context-mode', ['setup', '--yes', '--agents', 'codex'], {
       env: { ...process.env, CODEX_HOME: codexDir }, stdio: 'pipe', timeout: 120_000,
     })
+    retireOrphanCodexMarketplace(codexDir)
   }
 
   if (hasCmd('rtk')) trustCodexRtk(codexDir)
