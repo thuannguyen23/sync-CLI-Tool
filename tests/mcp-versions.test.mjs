@@ -22,3 +22,9 @@ test('version inspection checks all catalog npm and PyPI packages and all host s
  assert.equal(await readLatest({kind:'commit',package:'owner/example'},async()=>({ok:true,json:async()=>[{sha:'a'.repeat(40)}]})),'a'.repeat(40));
  await assert.rejects(()=>readLatest({kind:'npm',package:'example'},async()=>({ok:false})),/registry/);
 });
+
+ test('version targets exclude removed Slack and Telegram MCPs', async () => {
+  const {versionTargets}=await import('../scripts/mcp-versions.mjs');
+  const packages=versionTargets({servers:{}}).map(x=>x.package);
+  assert.equal(packages.some(x=>/slack|telegram/i.test(x)),false);
+ });

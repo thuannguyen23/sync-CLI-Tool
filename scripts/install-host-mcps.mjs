@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash,randomUUID } from 'node:crypto';
 import { assertNodeVersion } from './node-version.mjs';
 
-export const hostInstallPlan=(installed,update)=>['github','slack','telegram'].filter(name=>update||!installed(name));
+export const hostInstallPlan=(installed,update)=>['github'].filter(name=>update||!installed(name));
 export function verifyChecksum(bytes,expected) {
   if(!/^[a-f\d]{64}$/i.test(expected??'')||createHash('sha256').update(bytes).digest('hex')!==expected.toLowerCase())throw new Error('Release checksum mismatch');
 }
@@ -47,41 +47,21 @@ export async function installRtk(temp,root,fetchBytes=download) {
   renameSync(staged,dest);console.log(`Installed RTK ${release.tag_name} (SHA-256 verified)`);
 }
 
-async function telegram(temp,root) {
-  const commits=JSON.parse((await download('https://api.github.com/repos/timoncool/telegram-api-mcp/commits?per_page=1')).toString()),sha=commits[0]?.sha;
-  if(!/^[a-f\d]{40}$/.test(sha??''))throw new Error('Telegram source revision unavailable');
-  const archive=join(temp,'telegram.tar.gz'),source=join(temp,'telegram');mkdirSync(source);
-  writeFileSync(archive,await download(`https://api.github.com/repos/timoncool/telegram-api-mcp/tarball/${sha}`));
-  run('tar',['-xzf',archive,'-C',source,'--strip-components=1']);
-  const parent=join(root,'.local/share/sync-cli-tool'),target=join(parent,'telegram-api-mcp');mkdirSync(parent,{recursive:true});
-  replaceTelegramBuild(source,target,sha);
-  console.log(`Installed Telegram MCP at revision ${sha.slice(0,12)}`);
-}
-export function replaceTelegramBuild(source,target,sha,runCommand=run) {
-  runCommand('npm',['ci','--no-audit','--no-fund'],{cwd:source});runCommand('npm',['run','build'],{cwd:source});
-  if(!existsSync(join(source,'dist/index.js')))throw new Error('Telegram build did not produce dist/index.js');
-  writeFileSync(join(source,'.sync-cli-source.json'),JSON.stringify({repository:'timoncool/telegram-api-mcp',commit:sha}));
-  if(existsSync(target))renameSync(target,target+'.backup-'+randomUUID());
-  renameSync(source,target);
-}
 export async function installHostMcps({update=false,dryRun=false,root=homedir(),rtkOnly=false}={}) {
   assertNodeVersion();
-  const installed=name=>name==='github'?existsSync(join(root,'.local/bin/github-mcp-server'))||has('github-mcp-server'):name==='slack'?has('slack-mcp'):existsSync(join(root,'.local/share/sync-cli-tool/telegram-api-mcp/dist/index.js'));
+  const installed=name=>name==='github'&&(existsSync(join(root,'.local/bin/github-mcp-server'))||has('github-mcp-server'));
   const plan=rtkOnly?['rtk']:hostInstallPlan(installed,update);
   if(dryRun){console.log(JSON.stringify({install:plan,update}));return;}
   if(plan.includes('github')&&!has('gh'))throw new Error('GitHub authentication needs gh. Ubuntu: sudo apt install gh; then gh auth login');
-  if(plan.includes('slack')&&!has('uv'))throw new Error('Slack installation requires uv (provided by prerequisites.sh)');
   const parent=join(root,'.local/share/sync-cli-tool');mkdirSync(parent,{recursive:true});const temp=mkdtempSync(join(parent,'.install-'));
   try{for(const name of plan){
     if(name==='rtk')await installRtk(temp,root);
     else if(name==='github')await installGithub(temp,root);
-    else if(name==='telegram')await telegram(temp,root);
-    else{run('uv',['tool','install',...(update?['--upgrade']:[]),'git+https://github.com/redhat-community-ai-tools/slack-mcp']);console.log('Installed Slack MCP');}
   }}finally{rmSync(temp,{recursive:true,force:true});}
   if(!plan.length)console.log('Host MCP components already installed; use --update to upgrade them');
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
   const args=process.argv.slice(2);
   if(args.some(a=>!['--update','--dry-run','--rtk-only'].includes(a)))throw new Error('Use --update, --dry-run or --rtk-only');
-  installHostMcps({update:args.includes('--update'),dryRun:args.includes('--dry-run'),rtkOnly:args.includes('--rtk-only')}).catch(()=>{console.error('Host MCP installation failed; check Node, gh/uv, network and build prerequisites. Existing Telegram build is retained until replacement succeeds.');process.exitCode=1;});
+  installHostMcps({update:args.includes('--update'),dryRun:args.includes('--dry-run'),rtkOnly:args.includes('--rtk-only')}).catch(()=>{console.error('Host MCP installation failed; check Node, gh, network and prerequisites.');process.exitCode=1;});
 }

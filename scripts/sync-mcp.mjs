@@ -460,15 +460,7 @@ function buildCline() {
 // Claude Code stores user-scoped MCP under top-level "mcpServers" key in ~/.claude.json
 function buildClaudeCode() {
   const claudeFile = join(HOME, ".claude.json");
-  let existing = {};
-  if (existsSync(claudeFile)) {
-    try {
-      const raw = readFileSync(claudeFile, "utf8");
-      existing = JSON.parse(raw);
-    } catch (e) {
-      warn(`Could not parse existing ~/.claude.json: ${e.message}`);
-    }
-  }
+  const existing = readConfig(claudeFile);
 
   const mcpServers = {};
   for (const [name, server] of Object.entries(servers)) {
@@ -582,12 +574,13 @@ function writeText(file, data, label) {
   if (!process.env.SKIP_CURSOR) {
     try {
       const cursorData = buildCursor();
-      writeJson(cursorFile, cursorData, "Cursor   ");
+      const mergeCursor = file => { const current = readConfig(file); return { ...current, mcpServers: { ...current.mcpServers, ...cursorData.mcpServers } }; };
+      writeJson(cursorFile, mergeCursor(cursorFile), "Cursor   ");
       if (existsSync(dirname(vscodeMcpFile))) {
-        writeJson(vscodeMcpFile, cursorData, "VS Code (User)  ");
+        writeJson(vscodeMcpFile, mergeCursor(vscodeMcpFile), "VS Code (User)  ");
       }
       if (existsSync(dirname(agyIdeUserMcpFile))) {
-        writeJson(agyIdeUserMcpFile, cursorData, "Antigravity IDE (User)");
+        writeJson(agyIdeUserMcpFile, mergeCursor(agyIdeUserMcpFile), "Antigravity IDE (User)");
       }
     } catch (e) {
       err(`Cursor / VS Code / Antigravity IDE: ${e.message}`);
@@ -624,8 +617,10 @@ function writeText(file, data, label) {
         HOME,
         ".config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
       );
-      writeJson(clineCliFile, clineData, "Cline (CLI)    ");
-      writeJson(clineVscodeFile, clineData, "Cline (VS Code)");
+      const mergeCline = file => { const current = readConfig(file); return { ...current, mcpServers: { ...current.mcpServers, ...clineData.mcpServers } }; };
+      const cliMerged = mergeCline(clineCliFile), vscodeMerged = mergeCline(clineVscodeFile);
+      writeJson(clineCliFile, cliMerged, "Cline (CLI)    ");
+      writeJson(clineVscodeFile, vscodeMerged, "Cline (VS Code)");
     } catch (e) {
       err(`Cline: ${e.message}`);
     }

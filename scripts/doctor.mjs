@@ -111,6 +111,7 @@ function inspectRules() {
     }
     for (const [name, dir] of targets) {
       const subject = `Instructions ${name}/${file}`;
+      if (!existsSync(dir)) { report('SKIPPED', subject, 'Client directory not present'); continue; }
       try {
         const matches = readFileSync(join(dir, file)).equals(readFileSync(canonical));
         report(matches ? 'OK' : 'ERROR', subject, matches

@@ -13,7 +13,7 @@
  *   - Cline:       ~/.cline/skills/
  */
 
-import { readdirSync, existsSync, mkdirSync, symlinkSync, unlinkSync, readlinkSync, lstatSync } from 'node:fs';
+import { readdirSync, existsSync, mkdirSync, symlinkSync, readlinkSync, lstatSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -37,21 +37,6 @@ function lstatSafe(path) {
   } catch {
     return null;
   }
-}
-
-function cleanupBrokenLinks(dir) {
-  if (!existsSync(dir)) return;
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-      const stat = lstatSafe(fullPath);
-      if (stat?.isSymbolicLink() && !existsSync(fullPath)) {
-        unlinkSync(fullPath);
-        info(`Cleaned broken link: ${fullPath}`);
-      }
-    }
-  } catch {}
 }
 
 export function syncSkills() {
@@ -106,7 +91,8 @@ export function syncSkills() {
           if (currentTarget === src) {
             continue; // already correctly linked
           }
-          unlinkSync(dest);
+          warn(`Preserving existing skill link: ${dest}`);
+          continue;
         } else if (stat) {
           // Exists as a non-symlink file/directory, do not overwrite
           continue;
@@ -117,8 +103,7 @@ export function syncSkills() {
       }
     }
 
-    // Clean dead symlinks
-    cleanupBrokenLinks(target.path);
+    // Preserve unrelated and temporarily unavailable links.
   }
 
   // Cursor handling: ensure symlink exists

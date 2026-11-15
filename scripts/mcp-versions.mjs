@@ -8,9 +8,7 @@ export function versionTargets(catalog){
   const targets=[{kind:'npm',package:'context-mode',global:true},{kind:'npm',package:'agent-browser',global:true},
     {kind:'github',package:'github/github-mcp-server',binary:'github-mcp-server'},
     {kind:'github',package:'colbymchenry/codegraph',binary:'codegraph'},
-    {kind:'github',package:'rtk-ai/rtk',binary:'rtk'},
-    {kind:'commit',package:'redhat-community-ai-tools/slack-mcp',local:'slack'},
-    {kind:'commit',package:'timoncool/telegram-api-mcp',local:'telegram'}];
+    {kind:'github',package:'rtk-ai/rtk',binary:'rtk'}];
   for(const s of Object.values(catalog.servers)){
     if(s.command?.[0]==='npx'){const spec=s.command.find(v=>v!=='npx'&&!v.startsWith('-'));targets.push({kind:'npm',package:spec.replace(/@[^@/]+$/,''),requested:spec});}
     if(s.command?.[0]==='uvx'){const spec=s.command[s.command.indexOf('--from')+1];targets.push({kind:'pypi',package:spec});}
@@ -32,17 +30,6 @@ export function observed(target,root,globalRoot){
       return {observed:[...found].join(', ')||null,evidence:'cached package versions; active session not inferred'};
     }
     if(target.binary){const output=execFileSync(target.binary,['--version'],{encoding:'utf8',timeout:5000,stdio:['ignore','pipe','ignore']});return {observed:output.match(/\d+\.\d+\.\d+/)?.[0]??null,evidence:'host binary'};}
-    if(target.local==='telegram'){const meta=join(root,'.local/share/sync-cli-tool/telegram-api-mcp/.sync-cli-source.json');return {observed:existsSync(meta)?JSON.parse(readFileSync(meta,'utf8')).commit:null,evidence:'installed source revision'};}
-    if(target.local==='slack'){
-      const base=execFileSync('uv',['tool','dir'],{encoding:'utf8',timeout:5000}).trim(),lib=join(base,'slack-mcp/lib');
-      for(const python of readdirSync(lib)){
-        const site=join(lib,python,'site-packages');
-        for(const dir of readdirSync(site).filter(d=>d.startsWith('slack_mcp-')&&d.endsWith('.dist-info'))){
-          const file=join(site,dir,'direct_url.json');
-          if(existsSync(file))return {observed:JSON.parse(readFileSync(file,'utf8')).vcs_info?.commit_id??null,evidence:'installed source revision'};
-        }
-      }
-    }
     if(target.kind==='pypi'){
       const cache=join(root,'.cache/uv/archive-v0'),versions=new Set(),prefix=target.package.replaceAll('-','_')+'-';
       if(existsSync(cache))for(const item of readdirSync(cache)){

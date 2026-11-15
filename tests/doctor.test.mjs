@@ -198,3 +198,8 @@ test('doctor detects policy drift without requiring a workflow document across t
   assert.match(r.stdout, /\[ERROR\] Instructions OpenCode\/AGENTS.md: Differs/);
   assert.equal(readFileSync(drift, 'utf8'), 'different workflow');
 });
+
+test('doctor skips rule checks for agent directories not installed', t => {
+  const f=fixture(t);const rules=join(f.home,'.agents/rules');mkdirSync(rules,{recursive:true});writeFileSync(join(rules,'AGENTS.md'),'policy');writeFileSync(join(f.home,'.codex/AGENTS.md'),'policy');
+  const r=f.run();assert.doesNotMatch(r.stdout,/\[ERROR\] Instructions AGY Global\/AGENTS.md/);assert.doesNotMatch(r.stdout,/\[ERROR\] Instructions OpenCode\/AGENTS.md/);assert.match(r.stdout,/\[SKIPPED\] Instructions OpenCode\/AGENTS.md/);
+});

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFileSync, symlinkSync, lstatSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, symlinkSync, lstatSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -600,4 +600,31 @@ fs.writeFileSync(file,'host-specific tool spelling');
     assert.equal(readFileSync(join(target, 'references/nested.md'), 'utf8'), 'nested reference');
     assert.equal(lstatSync(target).isSymbolicLink(), false);
   }
+});
+
+test('Cursor and Cline preserve personal MCP servers and settings', t => {
+  const f=fixture(t,['CURSOR','CLINE']);
+  const files=[join(f.home,'.cursor/mcp.json'),join(f.home,'.cline/data/settings/cline_mcp_settings.json')];
+  for (const file of files) f.write(file,{custom:'keep',mcpServers:{personal:{command:'mine'}}});
+  const r=f.run('sync-mcp.mjs');assert.equal(r.status,0,r.stderr);
+  for (const file of files) { const d=JSON.parse(readFileSync(file));assert.equal(d.custom,'keep');assert.equal(d.mcpServers.personal.command,'mine');assert.ok(d.mcpServers.audit); }
+});
+
+test('Claude malformed config remains untouched even with old backup', t => {
+  const f=fixture(t,['CLAUDE']);const file=join(f.home,'.claude.json');const original='{"personal":"new", BAD';f.write(file,original);f.write(file+'.bak','{"old":true}');
+  const r=f.run('sync-mcp.mjs');assert.notEqual(r.status,0);assert.equal(readFileSync(file,'utf8'),original);assert.equal(readFileSync(file+'.bak','utf8'),'{"old":true}');
+});
+
+test('skill sync preserves personal and unrelated broken symlinks', t => {
+  const f=fixture(t,['AGY']);const dir=join(f.home,'.gemini/config/skills');mkdirSync(dir,{recursive:true});const personal=join(f.home,'personal');mkdirSync(personal);symlinkSync(personal,join(dir,'brainstorming'));symlinkSync(join(f.home,'unavailable'),join(dir,'unrelated'));
+  const r=f.run('sync-skills.mjs');assert.equal(r.status,0,r.stderr);assert.equal(realpathSync(join(dir,'brainstorming')),personal);assert.ok(lstatSync(join(dir,'unrelated')).isSymbolicLink());
+});
+
+test('AGY plugin deployment saves pre-existing hook before overwrite', t => {
+  const f=fixture(t,['AGY']);const pkg=join(f.home,'npm/context-mode');const old=join(f.home,'.local/share/sync-cli-tool/context-mode-agy/node_modules/context-mode');
+  f.write(join(pkg,'package.json'),{version:'2.1.5'});f.write(join(old,'package.json'),{version:'1.0.169'});f.write(join(old,'configs/antigravity-cli/plugin.json'),{name:'context-mode',version:'1.0.169'});f.write(join(old,'configs/antigravity-cli/hooks.json'),{hooks:{}});f.write(join(old,'configs/antigravity-cli/mcp_config.json'),{mcpServers:{}});f.write(join(old,'../.bin/context-mode'),'#!/bin/sh\nexit 0\n');
+  f.write(join(f.bin,'npm'),'#!/bin/sh\necho "'+join(f.home,'npm')+'"\n');for (const n of ['context-mode','agy']) f.write(join(f.bin,n),'#!/bin/sh\nexit 0\n');spawnSync('chmod',['+x',join(f.bin,'npm'),join(f.bin,'context-mode'),join(f.bin,'agy')]);
+  const hook=join(f.home,'.gemini/config/plugins/context-mode/hooks.json');f.write(hook,{personal:{Stop:[]}});const r=f.run('sync-hooks.mjs');assert.equal(r.status,0,r.stderr);assert.match(readFileSync(hook+'.bak','utf8'),/personal/);assert.ok(JSON.parse(readFileSync(hook)).personal);
+  assert.equal(f.run('sync-hooks.mjs').status,0);assert.ok(JSON.parse(readFileSync(hook)).personal);
+  assert.ok(readdirSync(join(f.home,'.gemini/config/plugins/context-mode')).some(n=>n.startsWith('hooks.json.bak.')));
 });

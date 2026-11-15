@@ -21,7 +21,7 @@
 
 import {
   readFileSync, writeFileSync, mkdirSync, existsSync,
-  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync, renameSync, mkdtempSync, rmSync
+  symlinkSync, unlinkSync, lstatSync, realpathSync, cpSync, chmodSync, renameSync, mkdtempSync, rmSync, copyFileSync, constants
 } from 'fs'
 import { join, dirname } from 'path'
 import { execSync, execFileSync } from 'child_process'
@@ -396,11 +396,37 @@ function syncAgy(ctxPkgDir) {
       readJSON(join(agyPkg, 'package.json')).version === '1.0.169') {
     for (const base of ['config', 'antigravity-cli']) {
     const dst = join(HOME, '.gemini', base, 'plugins/context-mode')
+    // Preserve current content even when an older .bak already exists.
+    const previousHooks = existsSync(join(dst, 'hooks.json')) ? readJSON(join(dst, 'hooks.json')) : {};
+    for (const file of ['hooks.json', 'mcp_config.json', 'plugin.json', 'rules/context-mode.md']) {
+      const current = join(dst, file);
+      if (!existsSync(current)) continue;
+      backupFile(current);
+      const content = readFileSync(current);
+      if (!content.equals(readFileSync(current + '.bak'))) {
+        const digest = createHash('sha256').update(content).digest('hex').slice(0, 16);
+        try { copyFileSync(current, current + '.bak.' + digest, constants.COPYFILE_EXCL) }
+        catch (error) { if (error.code !== 'EEXIST') throw error }
+      }
+    }
     cpSync(agySrc, dst, { recursive: true, force: true })
     normalizeAgyContextRule(dst)
     normalizeAgyContextHooks(dst)
     const hookFile = join(dst, 'hooks.json')
     const hooks = readJSON(hookFile)
+    // Retain user-defined hook groups; replace only context-mode handlers.
+    for (const [name, definition] of Object.entries(previousHooks)) {
+      if (name !== 'hooks' && !Object.hasOwn(hooks, name)) hooks[name] = definition
+    }
+    for (const [event, groups] of Object.entries(previousHooks.hooks || {})) {
+      if (!Array.isArray(groups)) continue
+      for (const group of groups) {
+        const handlers = (group.hooks || [group]).filter(h => !/\bhook antigravity-cli (?:pretooluse|posttooluse|stop)\s*$/.test(String(h.command || '')))
+        if (!handlers.length) continue
+        hooks.hooks ||= {}; hooks.hooks[event] ||= []
+        hooks.hooks[event].push(group.hooks ? { ...group, hooks: handlers } : handlers[0])
+      }
+    }
     for (const groups of Object.values(hooks.hooks || {})) {
       for (const group of groups) for (const hook of (group.hooks || [group])) {
         if (hook.command?.startsWith('context-mode ')) hook.command = `CONTEXT_MODE_DIR=${shellQuote(join(HOME, '.local/state/sync-cli-tool/context-mode-agy-data'))} ` + shellQuote(agyBin) + hook.command.slice('context-mode'.length)

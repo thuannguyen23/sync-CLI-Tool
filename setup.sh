@@ -210,7 +210,6 @@ if [ -z "${SKIP_CLAUDE:-}" ]; then
     target="$HOME_DIR/.claude/skills/$skill_name"
     if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
   done
-  find "$HOME_DIR/.claude/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
   ok "Claude Code skills linked to ~/.claude/skills/"
 else
   info "Claude Code skills sync skipped."
@@ -224,7 +223,6 @@ if [ -z "${SKIP_CLINE:-}" ]; then
     target="$HOME_DIR/.cline/skills/$skill_name"
     if [ ! -e "$target" ]; then ln -sfn "$skill_dir" "$target"; fi
   done
-  find "$HOME_DIR/.cline/skills" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
   ok "Cline skills: linked to ~/.cline/skills/ (and ~/.agents/skills native)"
 else
   info "Cline skills sync skipped."
@@ -352,12 +350,9 @@ echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━�
 echo -e "${GREEN}${BOLD}  ✨ Setup complete!${NC}"
 echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Skills:       ~/.agents/skills/ (symlinked to AGY, Cursor, Codex, Claude Code, Cline)"
-echo "  Rules:        ~/.agents/rules/AGENTS.md (AGY, Codex, OpenCode, Kilo, Cursor plugin, Claude Code, Cline)"
-echo "  MCP:          servers synced to AGY, Cursor, OpenCode, Codex, Kilo, Cline, Claude Code"
-echo "  RTK:          hook (Cursor, Claude Code), plugin (OpenCode), RTK.md (Codex, Kilo), rules (AGY, Cline)"
-echo "  Context-mode: pinned v1 plugin (AGY CLI), native v2 adapters (Codex, OpenCode); other adapters require verification"
-echo "  Herdr:        sessionStart hooks (Cursor, Codex)"
+echo "  Skills, rules, MCP and hooks: synchronized for selected agents; see results above."
+echo "  Context-mode: AGY CLI uses pinned v1; Codex and OpenCode use v2 when selected."
+echo "  Configuration presence does not establish runtime or authentication health."
 echo ""
 echo "  When you add a new MCP server:"
 echo -e "  ${DIM}1. Edit ~/.agents/mcp/servers.json${NC}"

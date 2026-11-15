@@ -143,38 +143,6 @@
       ],
       "description": "Official GitHub MCP server using the signed-in gh account"
     },
-    "//slack": {
-      "command": [
-        "slack-mcp"
-      ],
-      "env": {
-        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}"
-      },
-      "requiredSecrets": [
-        "SLACK_BOT_TOKEN"
-      ],
-      "requires": [
-        "slack-mcp"
-      ],
-      "description": "Slack MCP using a bot token; skipped when the token is empty"
-    },
-    "//telegram": {
-      "command": [
-        "node",
-        "${HOME}/.local/share/sync-cli-tool/telegram-api-mcp/dist/index.js"
-      ],
-      "env": {
-        "TELEGRAM_BOT_TOKEN": "${TELEGRAM_BOT_TOKEN}",
-        "TELEGRAM_META_MODE": "true"
-      },
-      "requiredSecrets": [
-        "TELEGRAM_BOT_TOKEN"
-      ],
-      "requires": [
-        "node"
-      ],
-      "description": "Telegram Bot API MCP in meta mode; skipped when the token is empty"
-    },
     "web-search": {
       "command": [
         "npx",

@@ -41,8 +41,6 @@ The repository includes MCP server definitions. Runtime availability depends on 
 | **`web-search`** | Stdio (`npx @zhafron/mcp-web-search`) | Fast, API-key-free web search powered by DuckDuckGo and Bing. |
 | **`agent-browser`** | Stdio (`npx @nxavis/agent-browser-mcp`) | Headless browser automation designed specifically for autonomous token-efficient agent browsing. |
 | **`github`** | Stdio (official `github-mcp-server`, via `gh` authentication) | GitHub repository management, issues, PR reviews, branches, and commit inspection. |
-| **`slack`** | Stdio (`slack-mcp`) | Slack tools; enabled when `SLACK_BOT_TOKEN` is set. |
-| **`telegram`** | Stdio (host-built `telegram-api-mcp`) | Telegram tools; enabled when `TELEGRAM_BOT_TOKEN` is set. |
 | **`obsidian-vault`** | Stdio (`obsidian-mcp serve --vault`) | Local filesystem access to the configured Obsidian vault. |
 | **`mysql-local-ecb`** | Stdio (`uvx mysql-mcp-server`) | Local MySQL development database integration (schema inspection, queries, samples). |
 | **`mysql-develop-ecb`**| Stdio (`uvx mysql-mcp-server`) | Remote staging/develop MySQL database integration. |
@@ -142,7 +140,7 @@ nano ~/.agents/secrets.env          # Fill in your API keys
 ```
 `setup.sh` checks common prerequisites, sets up directory symlinks, configures hooks, and converts MCP definitions for detected tools. Pass `-s` or `--silent` for automated non-interactive runs. Node.js 24.15 or newer is required. Existing older runtimes are rejected before configuration changes. Prerequisite failures stop setup.
 
-`setup.sh` installs missing host servers through `scripts/install-host-mcps.mjs`. GitHub uses the official release binary with SHA-256 verification and requires `gh` plus `gh auth login` (Ubuntu: `sudo apt install gh`). Slack uses `uv tool install git+https://github.com/redhat-community-ai-tools/slack-mcp`. Telegram builds upstream source with `npm ci` and `npm run build` before replacing the host checkout. Put bot tokens in `~/.agents/secrets.env`; blank optional credentials skip registration. Provider credentials are never included in the Codex registration command arguments, and generated JSON MCP configs and backups are private files.
+`setup.sh` installs missing host servers through `scripts/install-host-mcps.mjs`. GitHub uses the official release binary with SHA-256 verification and requires `gh` plus `gh auth login` (Ubuntu: `sudo apt install gh`). Provider credentials are never included in the Codex registration command arguments, and generated JSON MCP configs and backups are private files.
 
 RTK uses the Rust Token Killer binary, not the unrelated npm package named `rtk`. Update it from the official GitHub release with `node scripts/install-host-mcps.mjs --rtk-only` (SHA-256 checked before replacement), then run `node scripts/sync-hooks.mjs --reload-opencode`. The general MCP update command also refreshes RTK. `npm run mcp:versions` reports the Rust binary version separately.
 
@@ -184,7 +182,7 @@ npm run mcp:update -- --dry-run  # Review exact update commands
 npm run mcp:update               # Upgrade host packages, refresh caches, then sync MCP and hooks
 ```
 
-Updates are explicit, not a background service. npm MCP entries request `@latest`; the updater refreshes npm and Python environments and rebuilds Telegram source. A failed update stops later steps; earlier package changes are not rolled back automatically. Telegram builds are replaced only after success and the previous checkout is retained as a backup. Restart agent sessions after updating. Version inspection does not prove which cached package an existing session has loaded.
+Updates are explicit, not a background service. npm MCP entries request `@latest`; the updater refreshes npm and Python environments. A failed update stops later steps; earlier package changes are not rolled back automatically. Restart agent sessions after updating. Version inspection does not prove which cached package an existing session has loaded.
 
 OpenCode model execution is a separate, explicit check. It calls the configured
 model, creates an archived session on a private server, and requires a completed
