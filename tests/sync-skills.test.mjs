@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { agentPaths } from '../scripts/agent-paths.mjs';
 
 test('sync-skills discovers skills in an isolated home', (t) => {
   const home = mkdtempSync(join(tmpdir(), 'skill-discovery-'));
@@ -25,6 +26,35 @@ test('sync-skills discovers skills in an isolated home', (t) => {
 test('package.json sync script includes sync-skills.mjs', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   assert.match(pkg.scripts.sync, /sync-skills\.mjs/);
+});
+
+test('Beads skill reaches every supported host and repeated sync preserves personal entries', t => {
+  const home = mkdtempSync(join(tmpdir(), 'beads-skill-hosts-'));
+  t.after(() => rmSync(home, { recursive: true, force: true }));
+  const active = join(home, 'active-codex');
+  const unsupported = join(home, '.unsupported', 'config.json');
+  mkdirSync(join(home, '.unsupported'));
+  writeFileSync(unsupported, 'preserve');
+  const hosts = agentPaths(home, active);
+  for (const { directory } of hosts) {
+    mkdirSync(join(directory, 'skills', 'personal'), { recursive: true });
+    writeFileSync(join(directory, 'skills', 'personal', 'SKILL.md'), 'personal');
+  }
+  for (let i = 0; i < 2; i++) {
+    const env = { ...process.env, HOME: home, CODEX_HOME: active };
+    for (const key of ['SKIP_CODEX', 'SKIP_AGY', 'SKIP_OPENCODE']) delete env[key];
+    const r = spawnSync(process.execPath, [new URL('../scripts/sync-skills.mjs', import.meta.url).pathname], {
+      cwd: new URL('..', import.meta.url).pathname, env, encoding: 'utf8',
+    });
+    assert.equal(r.status, 0, r.stderr);
+    for (const { directory } of hosts) {
+      const skill = join(directory, 'skills', 'beads-execution');
+      assert.ok(existsSync(join(skill, 'SKILL.md')), directory);
+      assert.equal(realpathSync(skill), realpathSync(new URL('../skills/beads-execution', import.meta.url)));
+      assert.equal(readFileSync(join(directory, 'skills', 'personal', 'SKILL.md'), 'utf8'), 'personal');
+    }
+  }
+  assert.equal(readFileSync(unsupported, 'utf8'), 'preserve');
 });
 
 test('sync-skills also populates an active CODEX_HOME without replacing system skills', (t) => {

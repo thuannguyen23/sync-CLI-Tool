@@ -1,6 +1,6 @@
 # Shared agent policy
 
-Policy revision: `focused-2026-11-15`.
+Policy revision: `focused-2026-11-16`.
 Applies to Codex, Antigravity and OpenCode. Host adapters may translate paths and
 tool syntax; permissions and acceptance criteria stay the same.
 
@@ -64,6 +64,18 @@ Use SureForge Quality Discipline for complex, multi-step quality/coverage work o
 when requested, scaled to risk. READY/REPAIR/BLOCKED require supporting facts;
 independent review is required only by the agreed contract or applicable workflow.
 If required review is unavailable, report the gap before claiming acceptance.
+
+## Optional durable execution tracking
+
+Use `beads-execution` only for authorized execution in a project explicitly
+enabled by `.agent-workflow.json`. Specs and approved plans own requirements;
+Beads records execution state, dependencies and ownership. A ready task grants
+no permission. Inspect through the project-pinned bridge; missing or incompatible
+Beads falls back to the existing plan/progress/handoff without automatic setup.
+Reconcile current Git, task state and fresh checks on resume. Beads writes need
+task authorization; `--allow-write` is only a technical gate. Default to one
+executor and serialized writes; Beads never grants delegation or starts agents.
+See the skill for lifecycle, handoff and multi-agent constraints.
 
 ## Explore code and protect context
 

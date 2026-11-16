@@ -138,3 +138,35 @@ test('help works without a repository or task notes', t => {
   assert.match(result.stdout, /Usage:/);
   assert.equal(existsSync(join(f.project, 'HANDOFF.md')), false);
 });
+
+test('optional bead reference records only an ID without invoking bd or changing Git', t => {
+  const f = fixture(t);
+  const bin = join(f.root, 'bin'); mkdirSync(bin);
+  const marker = join(f.root, 'bd-was-called');
+  writeFileSync(join(bin, 'bd'), '#!/bin/sh\ntouch "' + marker + '"\nexit 99\n', { mode: 0o700 });
+  const before = f.git('status', '--porcelain=v1');
+  const head = f.git('rev-parse', 'HEAD');
+  const result = spawnSync(process.execPath, [script, '--project', f.project,
+    '--task', 'notes.md', '--bead', 'demo-a12.3'], {
+    env: { ...process.env, PATH: bin + ':' + process.env.PATH }, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const output = readFileSync(join(f.project, 'HANDOFF.md'), 'utf8');
+  assert.match(output, /Beads issue: demo-a12\.3/);
+  assert.match(output, /current Beads state/);
+  assert.equal(existsSync(marker), false);
+  assert.equal(f.git('rev-parse', 'HEAD'), head);
+  assert.equal(f.git('status', '--porcelain=v1').replace('?? HANDOFF.md\n', ''), before);
+  const again = f.run('--project', f.project, '--task', 'notes.md', '--bead', 'demo-a12.3');
+  assert.equal(again.status, 1);
+  assert.match(again.stderr, /already exists/);
+});
+
+test('rejects malformed bead IDs before handoff creation', t => {
+  const f = fixture(t);
+  for (const id of ['--global', 'demo', 'demo-1\nInjected', 'demo-$(touch PWNED)', '../demo-1', 'd-' + 'a'.repeat(200)]) {
+    const result = f.run('--project', f.project, '--task', 'notes.md', '--bead', id);
+    assert.equal(result.status, 1, id);
+    assert.equal(existsSync(join(f.project, 'HANDOFF.md')), false);
+  }
+});

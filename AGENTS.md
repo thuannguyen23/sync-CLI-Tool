@@ -9,6 +9,9 @@ facts, commands and side effects. Do not copy the global policy here.
 - `scripts/agent-paths.mjs`: supported policy/skill destinations, including the
   active `CODEX_HOME` and Antigravity Global/CLI/IDE/App paths.
 - `scripts/config-utils.mjs`: shared config parsing, private backups and paths.
+- `scripts/beads-workflow.mjs`: optional, project-pinned Beads CLI bridge;
+  `skills/beads-execution/` describes execution tracking without granting authority.
+  See `docs/integrations/beads.md`; the task DB belongs to each opted-in coding repo.
 - `scripts/sync-{skills,rules,mcp,hooks}.mjs`: distribution entry points. MCP and
   hook schemas are host-specific; preserve personal entries and repeated-sync safety.
 - `rules/AGENTS.md`: shared behavioral contract. `skills/` contains upstream
@@ -29,6 +32,9 @@ Requires Node.js >=24.15.0. There is no dependency install/build step for tests.
 - Syntax: `node --check scripts/<changed-file>.mjs`, `bash -n setup.sh teardown.sh scripts/prerequisites.sh`.
 - Whitespace: `git diff --check`.
 - Read-only configuration diagnostics: `npm run doctor`.
+- Isolated Beads checks: `node --test tests/beads-workflow.test.mjs tests/handoff.test.mjs tests/sync-skills.test.mjs`.
+  Bridge `enable` previews; `enable --apply` writes a project manifest. Native
+  Beads writes require explicit task authorization as well as `--allow-write`.
 - Agent behavior evaluation instructions: `docs/workflow-eval.md`; checker tests
   alone do not establish agent behavior or a performance improvement.
 

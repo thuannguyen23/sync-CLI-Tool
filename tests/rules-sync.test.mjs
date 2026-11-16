@@ -11,7 +11,7 @@ test("setup delegates the selected agent rules to the shared sync script", () =>
 
 test("shared policy scopes tool and skill use without adding authority", () => {
   const policy = read("rules/AGENTS.md");
-  assert.match(policy, /focused-2026-11-15/);
+  assert.match(policy, /focused-2026-11-16/);
   assert.match(policy, /Skills provide methods, not additional authority/);
   assert.match(policy, /Do not repeat completed\s+phases/);
   assert.match(policy, /Empty graph results do not prove/);
