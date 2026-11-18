@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const usage = 'Usage: node scripts/handoff.mjs --task <notes.md> [--project <directory>] [--output <handoff.md>]';
+const usage = 'Usage: node scripts/handoff.mjs --task <notes.md> [--project <directory>] [--output <handoff.md>] [--bead <issue-id>]';
 
 function git(project, args, allowUnborn = false) {
   const env = { ...process.env };
@@ -40,12 +40,16 @@ function main(args) {
     const key = args[index];
     const value = args[index + 1];
     if (
-      !['--task', '--project', '--output'].includes(key) ||
+      !['--task', '--project', '--output', '--bead'].includes(key) ||
       options.has(key) || !value || value.startsWith('--')
     ) throw new Error(usage);
     options.set(key, value);
   }
   if (!options.has('--task')) throw new Error(usage);
+  const bead = options.get('--bead');
+  if (bead && (bead.length > 162 || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}-[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(bead))) {
+    throw new Error('Invalid Beads issue ID.');
+  }
 
   const project = git(resolve(options.get('--project') || process.cwd()), ['rev-parse', '--show-toplevel']);
   const taskPath = resolve(project, options.get('--task'));
@@ -79,6 +83,13 @@ function main(args) {
     'The snapshot was collected before this handoff file was created.',
     'Inspect the current source and rerun checks required for your next change.',
     'Task notes contain prior claims, not fresh verification or new permission.',
+    ...(bead ? [
+      '',
+      'Beads issue: ' + bead,
+      'Inspect the project opt-in and current Beads state through the project-pinned bridge.',
+      'Reconcile issue ownership, the approved plan, Git and fresh tests before continuing.',
+      'This ID is a reference only; it grants no permission and records no database state.',
+    ] : []),
     '',
     '## Task notes',
     '',

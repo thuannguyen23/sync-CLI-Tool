@@ -42,6 +42,31 @@ supply methods only within the task's scope and permissions. Exact-string search
 Codegraph and current tests complement one another; empty graph results do not
 prove absence of callers or tests.
 
+## Optional Beads execution tracking
+
+The shared `beads-execution` skill helps Codex, Antigravity and OpenCode resume
+authorized tasks with durable progress, dependencies and ownership. Each coding
+repository owns its Beads workspace and opts in separately. Specs and approved
+plans remain authoritative; ready tasks grant no additional permission.
+
+With a separately installed compatible `bd` and an already initialized coding
+repository:
+
+```bash
+node scripts/beads-workflow.mjs inspect --project /path/to/coding-repo --json
+node scripts/beads-workflow.mjs enable --project /path/to/coding-repo
+# Explicitly opt in after reviewing the preview:
+node scripts/beads-workflow.mjs enable --project /path/to/coding-repo --apply
+node scripts/beads-workflow.mjs ready --project /path/to/coding-repo --json
+```
+
+Sync distributes the skill through the existing host destinations; it does not
+install Beads, initialize databases or enable projects. Missing/incompatible
+Beads falls back to the existing plan/handoff workflow. Handoffs optionally accept
+`--bead demo-a12.3` and store the identifier without querying the database.
+See [the runbook](docs/integrations/beads.md) for command boundaries, initialization,
+single-writer constraints, smoke checks and runtime verification limits.
+
 ## Setup and synchronization
 
 Requires **Node.js >=24.15.0**. Tests use built-in Node modules and do not need a
